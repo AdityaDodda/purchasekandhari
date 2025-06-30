@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model approval_matrix {
+  emp_code             String  @id @db.VarChar(30)
+  name                 String? @db.VarChar(100)
+  email                String? @db.VarChar(100)
+  mobile_no            String? @db.VarChar(20)
+  site                 String? @db.VarChar(10)
+  department           String? @db.VarChar(50)
+  approver_1_name      String? @db.VarChar(100)
+  approver_1_email     String? @db.VarChar(100)
+  approver_1_emp_code  String? @db.VarChar(30)
+  approver_2_name      String? @db.VarChar(100)
+  approver_2_email     String? @db.VarChar(100)
+  approver_2_emp_code  String? @db.VarChar(30)
+  approver_3a_name     String? @db.VarChar(100)
+  approver_3a_email    String? @db.VarChar(100)
+  approver_3a_emp_code String? @db.VarChar(30)
+  approver_3b_name     String? @db.VarChar(100)
+  approver_3b_email    String? @db.VarChar(100)
+  approver_3b_emp_code String? @db.VarChar(30)
+  users                users   @relation(fields: [emp_code], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model departments {
+  dept_number String  @id @db.VarChar(20)
+  dept_name   String? @db.VarChar(100)
+}
+
+model sites {
+  id           BigInt @id @default(autoincrement())
+  Legal_Entity String @map("Legal Entity") @db.VarChar(20)
+  Site_ID      String @map("Site ID") @db.VarChar(10)
+  Site_Name    String @map("Site Name") @db.VarChar(255)
+}
+
+model users {
+  emp_code            String           @id @db.VarChar(30)
+  name                String?          @db.VarChar(100)
+  email               String?          @db.VarChar(100)
+  mobile_no           String?          @db.VarChar(20)
+  department          String?          @db.VarChar(50)
+  manager_name        String?          @db.VarChar(100)
+  manager_email       String?          @db.VarChar(100)
+  entity              String?          @db.VarChar(10)
+  location            String?          @db.VarChar(50)
+  site                String?          @db.VarChar(10)
+  role                String?          @db.VarChar(50)
+  description         String?
+  erp_id              String?          @db.VarChar(100)
+  password            String           @default("")
+  must_reset_password Boolean?         @default(true)
+  approval_matrix     approval_matrix?
+}
