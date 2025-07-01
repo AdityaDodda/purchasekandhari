@@ -20,17 +20,49 @@ export interface PurchaseRequestFormData {
 }
 
 export interface User {
-  id: number;
-  employeeNumber: string;
-  fullName: string;
-  email: string;
-  mobile?: string;
-  department: string;
-  location: string;
-  role: string;
-  isActive: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  emp_code: string;
+  name?: string;
+  email?: string;
+  mobile_no?: string;
+  department?: string;
+  manager_name?: string;
+  manager_email?: string;
+  entity?: string;
+  location?: string;
+  site?: string;
+  role?: string;
+  description?: string;
+  erp_id?: string;
+  password: string;
+  must_reset_password?: boolean;
+  approval_matrix?: ApprovalMatrix;
+}
+
+export interface ApprovalMatrix {
+  emp_code: string;
+  name?: string;
+  email?: string;
+  mobile_no?: string;
+  site?: string;
+  department?: string;
+
+  approver_1_name?: string;
+  approver_1_email?: string;
+  approver_1_emp_code?: string;
+
+  approver_2_name?: string;
+  approver_2_email?: string;
+  approver_2_emp_code?: string;
+
+  approver_3a_name?: string;
+  approver_3a_email?: string;
+  approver_3a_emp_code?: string;
+
+  approver_3b_name?: string;
+  approver_3b_email?: string;
+  approver_3b_emp_code?: string;
+
+  users?: User;
 }
 
 export interface PurchaseRequest {

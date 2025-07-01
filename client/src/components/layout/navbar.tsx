@@ -172,10 +172,10 @@ export function Navbar() {
                   >
                     <div className="w-8 h-8 bg-[hsl(32,100%,50%)] rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-semibold text-sm">
-                        {user?.fullName ? user.fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
+                        {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
                       </span>
                     </div>
-                    <span className="hidden md:inline truncate max-w-[120px]">{user?.fullName ?? 'User'}</span>
+                    <span className="hidden md:inline truncate max-w-[120px]">{user?.name ?? 'User'}</span>
                     <ChevronDown className="h-4 w-4 text-white flex-shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>

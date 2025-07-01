@@ -62,6 +62,9 @@ export interface IStorage {
   updateUser(empCode: string, user: Partial<InsertUser>): Promise<User>; // Changed id: number to empCode: string
   updateUserPassword(empCode: string, password: string): Promise<void>; // Changed id: number to empCode: string
   
+  // NEW: Method to get unique email domains
+  getUniqueEmailDomains(): Promise<string[]>;
+
   // This function is incompatible with the 'approval_matrix' schema. Will return empty/throw.
   getApproversByDepartmentLocation(department: string, location: string): Promise<User[]>;
 
@@ -194,14 +197,14 @@ export class DatabaseStorage implements IStorage {
 
   // User operations
   async getUser(empCode: string): Promise<User | null> { // Parameter changed to empCode: string
-    return this.prisma.users.findUnique({ // Use `this.prisma`
+    return this.prisma.users.findUnique({ 
       where: { emp_code: empCode }, // Primary key is `emp_code` (string)
     });
   }
 
   async getUserByEmployeeNumber(employeeNumber: string): Promise<User | null> {
     // In your current schema, 'emp_code' serves as the employee number and is the primary key.
-    return this.prisma.users.findUnique({ // Use `this.prisma`
+    return this.prisma.users.findUnique({ 
       where: { emp_code: employeeNumber },
     });
   }
@@ -209,20 +212,20 @@ export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | null> {
     // Note: 'email' is not marked @unique in your schema, so findFirst is safer if multiple matches possible.
     // If it's effectively unique, you might consider adding @unique to the schema.
-    return this.prisma.users.findFirst({ // Use `this.prisma`
+    return this.prisma.users.findFirst({ 
       where: { email },
     });
   }
 
   async createUser(userData: InsertUser): Promise<User> {
-    const createdUser = await this.prisma.users.create({ // Use `this.prisma`
+    const createdUser = await this.prisma.users.create({ 
       data: userData,
     });
     return createdUser;
   }
 
   async updateUser(empCode: string, userData: Partial<InsertUser>): Promise<User> { // Parameter changed to empCode: string
-    const updatedUser = await this.prisma.users.update({ // Use `this.prisma`
+    const updatedUser = await this.prisma.users.update({ 
       where: { emp_code: empCode }, // Update by `emp_code`
       data: userData,
     });
@@ -230,13 +233,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserPassword(empCode: string, password: string): Promise<void> { // Parameter changed to empCode: string
-    await this.prisma.users.update({ // Use `this.prisma`
+    await this.prisma.users.update({ 
       where: { emp_code: empCode }, // Update by `emp_code`
       data: {
         password,
         must_reset_password: false, // Mark that password has been reset/is no longer temporary
       },
     });
+  }
+
+ // Implementation for getUniqueEmailDomains
+  async getUniqueEmailDomains(): Promise<string[]> {
+    try {
+    const result = await this.prisma.$queryRaw<{ domain: string }[]>(Prisma.sql`
+      SELECT DISTINCT LOWER(TRIM(SPLIT_PART(email, '@', 2))) AS domain
+      FROM "users"
+      WHERE email IS NOT NULL AND POSITION('@' IN email) > 0
+    `);
+
+    return result
+      .map(row => row.domain)
+      .filter(domain => domain); // Removes null or empty entries
+  } catch (error) {
+    console.error("Error in getUniqueEmailDomains:", error);
+    return [];
+  }
   }
 
   async getApproversByDepartmentLocation(department: string, location: string): Promise<User[]> {
@@ -325,11 +346,11 @@ export class DatabaseStorage implements IStorage {
 
   // Master Data implementations for Admin system
   async getAllUsers(): Promise<User[]> {
-    return this.prisma.users.findMany(); // Use `this.prisma`
+    return this.prisma.users.findMany(); 
   }
 
   async deleteUser(empCode: string): Promise<void> { // Parameter changed to empCode: string
-    await this.prisma.users.delete({ where: { emp_code: empCode } }); // Use `this.prisma`
+    await this.prisma.users.delete({ where: { emp_code: empCode } }); 
   }
 
   // Entity Master implementations - NOT IMPLEMENTED
@@ -348,16 +369,16 @@ export class DatabaseStorage implements IStorage {
 
   // Department Master implementations - UPDATED: Primary key is dept_number (string)
   async getAllDepartments(): Promise<Department[]> {
-    return this.prisma.departments.findMany(); // Use `this.prisma`
+    return this.prisma.departments.findMany(); 
   }
 
   async createDepartment(departmentData: InsertDepartment): Promise<Department> {
-    const createdDepartment = await this.prisma.departments.create({ data: departmentData }); // Use `this.prisma`
+    const createdDepartment = await this.prisma.departments.create({ data: departmentData }); 
     return createdDepartment;
   }
 
   async updateDepartment(deptNumber: string, departmentData: Partial<InsertDepartment>): Promise<Department> { // Parameter changed to deptNumber: string
-    const updatedDepartment = await this.prisma.departments.update({ // Use `this.prisma`
+    const updatedDepartment = await this.prisma.departments.update({ 
       where: { dept_number: deptNumber }, // Update by `dept_number`
       data: departmentData,
     });
@@ -365,7 +386,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDepartment(deptNumber: string): Promise<void> { // Parameter changed to deptNumber: string
-    await this.prisma.departments.delete({ where: { dept_number: deptNumber } }); // Use `this.prisma`
+    await this.prisma.departments.delete({ where: { dept_number: deptNumber } }); 
   }
 
   // Location Master operations - NOT IMPLEMENTED (replaced by 'sites' conceptually)
@@ -398,16 +419,16 @@ export class DatabaseStorage implements IStorage {
 
   // Approval Matrix operations - UPDATED: Primary key is emp_code (string)
   async getAllApprovalMatrix(): Promise<ApprovalMatrix[]> {
-    return this.prisma.approval_matrix.findMany(); // Use `this.prisma`
+    return this.prisma.approval_matrix.findMany(); 
   }
 
   async createApprovalMatrix(matrixData: InsertApprovalMatrix): Promise<ApprovalMatrix> {
-    const createdMatrix = await this.prisma.approval_matrix.create({ data: matrixData }); // Use `this.prisma`
+    const createdMatrix = await this.prisma.approval_matrix.create({ data: matrixData }); 
     return createdMatrix;
   }
 
   async updateApprovalMatrix(empCode: string, matrixData: Partial<InsertApprovalMatrix>): Promise<ApprovalMatrix> { // Parameter changed to empCode: string
-    const updatedMatrix = await this.prisma.approval_matrix.update({ // Use `this.prisma`
+    const updatedMatrix = await this.prisma.approval_matrix.update({ 
       where: { emp_code: empCode }, // Update by `emp_code`
       data: matrixData,
     });
@@ -415,7 +436,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteApprovalMatrix(empCode: string): Promise<void> { // Parameter changed to empCode: string
-    await this.prisma.approval_matrix.delete({ where: { emp_code: empCode } }); // Use `this.prisma`
+    await this.prisma.approval_matrix.delete({ where: { emp_code: empCode } }); 
   }
 
   // Escalation Matrix operations - NOT IMPLEMENTED
@@ -462,16 +483,16 @@ export class DatabaseStorage implements IStorage {
 
   // NEW: Site operations (fully implemented as 'sites' model exists)
   async getAllSites(): Promise<Site[]> {
-    return this.prisma.sites.findMany(); // Use `this.prisma`
+    return this.prisma.sites.findMany(); 
   }
 
   async createSite(siteData: InsertSite): Promise<Site> {
-    const createdSite = await this.prisma.sites.create({ data: siteData }); // Use `this.prisma`
+    const createdSite = await this.prisma.sites.create({ data: siteData }); 
     return createdSite;
   }
 
   async updateSite(id: bigint, siteData: Partial<InsertSite>): Promise<Site> {
-    const updatedSite = await this.prisma.sites.update({ // Use `this.prisma`
+    const updatedSite = await this.prisma.sites.update({ 
       where: { id: id },
       data: siteData,
     });
@@ -479,7 +500,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteSite(id: bigint): Promise<void> {
-    await this.prisma.sites.delete({ where: { id: id } }); // Use `this.prisma`
+    await this.prisma.sites.delete({ where: { id: id } }); 
   }
 }
 

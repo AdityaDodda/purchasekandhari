@@ -1,17 +1,14 @@
-// server/routes.ts (This file remains the same as the last version I provided)
-
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage"; // Your updated storage.ts (Prisma-based)
+import { storage } from "./storage";
 import { z } from "zod";
-
 import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { sendPasswordResetEmail, sendPurchaseRequestToApprovers } from "./email";
 
-// --- Zod Schemas (Redefined for Prisma Compatibility with your new schema) ---
+// Zod Schemas (Redefined for Prisma Compatibility with your new schema)
 const insertUserSchema = z.object({
   emp_code: z.string().min(1, "Employee code is required."),
   name: z.string().optional().nullable(),
@@ -55,7 +52,7 @@ const insertLineItemSchema = z.object({
   stockAvailable: z.number().optional().nullable(),
 });
 
-// --- Multer Configuration for File Uploads ---
+// Multer Configuration for File Uploads
 const uploadDir = "uploads";
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -131,13 +128,11 @@ export function registerRoutes(app: Express): Server {
   // Auth routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      // *** MODIFIED: Expect email for login ***
       const { email, password } = z.object({
         email: z.string().email("Invalid email format."),
         password: z.string(),
       }).parse(req.body);
 
-      // *** MODIFIED: Get user by email ***
       const user = await storage.getUserByEmail(email);
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
@@ -174,6 +169,16 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/auth/domains", async (req, res) => {
+    try {
+      const domains = await storage.getUniqueEmailDomains();
+      res.json(domains);
+    } catch (error) {
+      console.error("Error fetching unique email domains:", error);
+      res.status(500).json({ message: "Failed to retrieve email domains." });
     }
   });
 

@@ -1,11 +1,9 @@
-// server/index.ts
-
 import express, { type Request, type Response, type NextFunction } from "express";
 import session from "express-session";
 import dotenv from "dotenv";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { storage } from "./storage"; // <--- ADD THIS EXPLICIT IMPORT
+import { storage } from "./storage";
 
 dotenv.config();
 
@@ -56,14 +54,11 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // Explicitly check if storage is ready (optional, but good for debugging)
     if (!storage) {
       throw new Error("DatabaseStorage instance (storage) failed to initialize.");
     }
-    // You could also add a test call here if storage had a simple test method:
-    // await storage.getAllDepartments(); // For example, to force a DB call and catch errors early.
 
-    const server = await registerRoutes(app); // This still registers all your routes
+    const server = await registerRoutes(app);
 
     // Central error handler
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -85,6 +80,6 @@ app.use((req, res, next) => {
     });
   } catch (error) {
     console.error("CRITICAL SERVER STARTUP ERROR:", error);
-    process.exit(1); // Exit process if Prisma client or storage fails to initialize
+    process.exit(1);
   }
 })();
