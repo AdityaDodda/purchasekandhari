@@ -2,3 +2,40 @@ updated passwords for
 rajkumarsharma@enrichagro.com qwertyasdf
 utilityggn@enrichagro.com qwertyasdf
 yogeshkumar@enrichagro.com qwertyasdf
+admin@kgbpl.com  qwertyasdf
+
+Please find the following discussion/action items from the today’s meeting.
+
+All Included
+1) Login will be based on email ID authentication. -- done
+2) Entity code will be included in the Approval Matrix.
+3) The dashboard will display level-wise approval tracking for each request record.
+(including: Current Approver Name, Final Approver,  Approval Level, Current Status, Number of Days Pending)
+4) Entity will be mandatory for creating a new request.
+5) Inventory and vendor data will be pulled daily from the ERP system.
+6) Attachment size should be less than 5 MB ( PDF or Excel only)
+7) Need to add a button to import the data in the Master lists
+8) Request date should be defaulting to current date -- done
+9) Expected Delivery Date (when the item is required) will be included in the request form.
+10) Approvers should be able to view attachments or links (PDF, Excel) in the approval view section.
+11) We need to implement a workflow with three levels (Approver1, Approver2 and Final Approver)
+12) There will be one approver for the first 2 levels; In the final level there will be one or more approvers, if anyone approves, it should be approved.
+ 
+
+Line item Form
+1) Vendor Code will be included (optional filed).
+2) In the item name field, user should be able to search either on item name or item code
+3) Cost will be entered manually by the user (no auto-fetch or calculation).
+4) Stock validation will not be enforced (no validation required).
+5) Estimated Cost per unit is not mandatory for every line item.
+
+
+DOUBTS TO BE CLARIFIED
+In the all included 2nd point entity data is missing for the approval_matrix xlsx they have shared with us. Like for which one what should we take.
+in the purchase request form what should we keep in the place of location for now it is taking static data
+and for business justification code what should we keep
+if a user raises a pr and the approver returns the request because it is wrong department or site then it should go with the same pr number or we have to change it to the new one
+
+PR-FINA-202506-006
+
+Updated PR Format PR-Entity-KGBPL-yearmonth-counter

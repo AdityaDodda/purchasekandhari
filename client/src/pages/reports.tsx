@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Download, Filter, Calendar, Users, MapPin, Building, FileText, Eye } from "lucide-react";
+import * as XLSX from 'xlsx'; // Import the xlsx library
 import { formatCurrency, formatDate } from "@/lib/utils";
-
 import { Navbar } from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,17 +12,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationPrevious,
-  PaginationNext,
-} from "@/components/ui/pagination";
+import {Pagination,PaginationContent,PaginationItem,PaginationLink,PaginationPrevious,PaginationNext} from "@/components/ui/pagination";
 import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
 import { ApprovalProgress } from "./my-requests";
-
 import { DEPARTMENTS, LOCATIONS, REQUEST_STATUSES } from "@/lib/constants";
 import { Calendar as UiCalendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -69,85 +61,72 @@ export default function Reports() {
     setShowDetailsModal(true);
   };
 
-  // For converting to csv format
-  const convertToCSV = (data: any[]) => {
-  if (!data.length) return "";
+  // NEW: Function to export data to XLSX
+  function exportToXLSX(data: any[], filename: string) {
+    if (!data || data.length === 0) {
+      console.warn("No data to export.");
+      return;
+    }
 
-  const headers = Object.keys(data[0]).filter(key => typeof data[0][key] !== "object");
-  const rows = data.map(row =>
-    headers.map(fieldName => {
-      let value = row[fieldName];
-      if (typeof value === "string") {
-        value = value.replace(/"/g, '""');
-      }
-      return `"${value ?? ""}"`;
-    }).join(",")
-  );
-
-  return [headers.join(","), ...rows].join("\r\n");
-};
-
-const downloadCSV = (csv: string, filename: string) => {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", filename);
-  link.click();
-};
-
- const handleExport = () => {
-  if (!filteredRequests.length) {
-    alert("No data available to export.");
-    return;
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase Requests');
+    XLSX.writeFile(workbook, filename);
   }
 
-  const simplifiedData = filteredRequests.map(req => ({
-    RequisitionNumber: req.requisitionNumber,
-    Title: req.title,
-    Requester: req.requester?.fullName,
-    Department: req.department,
-    Location: req.location,
-    Amount: req.totalEstimatedCost,
-    Status: req.status,
-    RequestDate: formatDate(req.requestDate),
-  }));
+  // handleExport to use exportToXLSX
+  const handleExporttoXlsx = () => {
+    if (!filteredRequests.length) {
+      alert("No data available to export.");
+      return;
+    }
 
-  const csv = convertToCSV(simplifiedData);
-  downloadCSV(csv, "purchase-request-report.csv");
-};
+    const simplifiedData = filteredRequests.map(req => ({
+      RequisitionNumber: req.requisitionNumber,
+      Title: req.title,
+      Requester: req.requester?.fullName,
+      Department: req.department,
+      Location: req.location,
+      Amount: req.totalEstimatedCost,
+      Status: req.status,
+      RequestDate: formatDate(req.requestDate),
+    }));
 
-const filteredRequests = Array.isArray(requests)
-  ? requests.filter((req: any) => {
-      if (filters.status !== "all" && req.status !== filters.status) return false;
-      if (filters.department !== "all" && req.department !== filters.department) return false;
-      if (filters.location !== "all" && req.location !== filters.location) return false;
-      if (filters.requester !== "all" && req.requester?.id?.toString() !== filters.requester) return false;
-      if (filters.search) {
-        const search = filters.search.toLowerCase();
-        const matches =
-          req.title?.toLowerCase().includes(search) ||
-          req.requisitionNumber?.toLowerCase().includes(search) ||
-          req.requester?.fullName?.toLowerCase().includes(search);
-        if (!matches) return false;
-      }
-      // Date range filter
-      if (filters.startDate) {
-        const reqDate = new Date(req.requestDate);
-        const start = new Date(filters.startDate);
-        if (reqDate < start) return false;
-      }
-      if (filters.endDate) {
-        const reqDate = new Date(req.requestDate);
-        const end = new Date(filters.endDate);
-        // Add 1 day to endDate to make it inclusive
-        end.setDate(end.getDate() + 1);
-        if (reqDate >= end) return false;
-      }
-      return true;
-    })
-  : [];
+    exportToXLSX(simplifiedData, "purchase-request-report.xlsx");
+  };
+
+  const filteredRequests = Array.isArray(requests)
+    ? requests.filter((req: any) => {
+        if (filters.status !== "all" && req.status !== filters.status) return false;
+        if (filters.department !== "all" && req.department !== filters.department) return false;
+        if (filters.location !== "all" && req.location !== filters.location) return false;
+        if (filters.requester !== "all" && req.requester?.id?.toString() !== filters.requester) return false;
+        if (filters.search) {
+          const search = filters.search.toLowerCase();
+          const matches =
+            req.title?.toLowerCase().includes(search) ||
+            req.requisitionNumber?.toLowerCase().includes(search) ||
+            req.requester?.fullName?.toLowerCase().includes(search);
+          if (!matches) return false;
+        }
+        // Date range filter
+        if (filters.startDate) {
+          const reqDate = new Date(req.requestDate);
+          const start = parseDDMMYYYY(filters.startDate);
+          if (start && reqDate < start) return false;
+        }
+        if (filters.endDate) {
+          const reqDate = new Date(req.requestDate);
+          const end = parseDDMMYYYY(filters.endDate);
+          if (end) {
+            // Add 1 day to endDate to make it inclusive
+            end.setDate(end.getDate() + 1);
+            if (reqDate >= end) return false;
+          }
+        }
+        return true;
+      })
+    : [];
 
   useEffect(() => {
     setPage(1);
@@ -337,9 +316,9 @@ const filteredRequests = Array.isArray(requests)
 
               {/* Export Button */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">&nbsp;</label>
+                <label className="text-sm font-medium text-gray-700"> </label>
                 <Button 
-                  onClick={handleExport}
+                  onClick={handleExporttoXlsx}
                   className="w-full bg-green-600 hover:bg-green-700"
                 >
                   <Download className="h-4 w-4 mr-2" />

@@ -464,34 +464,47 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
-    try {
-      const { type } = req.params;
-      let data: any[] = [];
+    app.get('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
+        try {
+            const { type } = req.params;
+            // 1. Extract and parse parameters from the query string sent by the frontend
+            const page = parseInt(req.query.page as string) || 1;
+            const pageSize = parseInt(req.query.pageSize as string) || 10;
+            const search = (req.query.search as string) || '';
+            // 2. Bundle these parameters into a single 'options' object
+            const options = { page, pageSize, search };
+            // This variable will hold the { data, totalCount } object from the storage layer
+            let result: { data: any[], totalCount: number };
 
-      switch (type) {
-        case 'users':
-          data = await storage.getAllUsers();
-          break;
-        case 'departments':
-          data = await storage.getAllDepartments();
-          break;
-        case 'sites':
-          data = await storage.getAllSites();
-          break;
-        case 'approval-matrix':
-          data = await storage.getAllApprovalMatrix();
-          break;
-        default:
-          return res.status(400).json({ message: 'Invalid master type or master type not supported by current schema.' });
-      }
+            // 3. Pass the SINGLE 'options' object to the correct storage function
+            switch (type) {
+                case 'users':
+                    result = await storage.getAllUsers(options);
+                    break;
+                case 'departments':
+                    result = await storage.getAllDepartments(options);
+                    break;
+                case 'sites':
+                    result = await storage.getAllSites(options);
+                    break;
+                case 'approval-matrix':
+                    result = await storage.getAllApprovalMatrix(options);
+                    break;
+                // You can add more cases here as you implement them in storage.ts
+                // e.g., case 'vendors': result = await storage.getAllVendors(options); break;
+                default:
+                    // For types not yet implemented, return an empty result to avoid frontend errors
+                    console.warn(`WARN: GET request for unimplemented master type: ${type}`);
+                    return res.json({ data: [], totalCount: 0 });
+            }
 
-      res.json(data);
-    } catch (error) {
-      console.error(`Error fetching ${req.params.type} master data:`, error);
-      res.status(500).json({ message: `Failed to fetch ${req.params.type} data` });
-    }
-  });
+            // 4. Send the entire result object back to the frontend
+            res.json(result);
+        } catch (error) {
+            console.error(`Error fetching ${req.params.type} master data:`, error);
+            res.status(500).json({ message: `Failed to fetch ${req.params.type} data` });
+        }
+    });
 
   app.post('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
     try {

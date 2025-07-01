@@ -61,37 +61,49 @@ model users {
 }
 
 model inventory {
-  item_code       String    @id @db.VarChar(100)
-  type            String    @db.VarChar(100)
-  name            String    @db.VarChar(255)
-  description     String?
-  quantity        Int?      @default(0)
-  unit_of_measure String    @db.VarChar(50)
-  location        String?   @db.VarChar(255)
-  min_stock_level Int?      @default(0)
-  max_stock_level Int?
-  unit_cost       Decimal?  @db.Decimal(10, 2)
-  is_active       Boolean?  @default(true)
-  created_at      DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+  itemnumber                        String   @id
+  bomunitsymbol                     String?
+  inventoryreservationhierarchyname String?
+  inventoryunitsymbol               String?
+  iscatchweightproduct              Boolean?
+  isproductkit                      Boolean?
+  itemmodelgroupid                  String?
+  lowerwarrantablepricerangelimit   Decimal? @db.Decimal
+  productdescription                String?
+  productdimensiongroupname         String?
+  productgroupid                    String?
+  productname                       String?
+  productnumber                     String?
+  productsearchname                 String?
+  productsubtype                    String?
+  producttype                       String?
+  purchasesalestaxitemgroupcode     String?
+  purchaseunitsymbol                String?
+  retailproductcategoryname         String?
+  salessalestaxitemgroupcode        String?
+  salesunitsymbol                   String?
+  searchname                        String?
+  servicetype                       String?
+  storagedimensiongroupname         String?
+  trackingdimensiongroupname        String?
+  upperwarrantablepricerangelimit   Decimal? @db.Decimal
+  variantconfigurationtechnology    String?
+  warrantablepricerangebasetype     String?
+  warrantydurationtime              Int?
+  warrantydurationtimeunit          String?
 }
 
 model vendors {
-  vendor_code    String    @id @db.VarChar(100)
-  name           String    @db.VarChar(255)
-  contact_person String?   @db.VarChar(255)
-  email          String?   @db.VarChar(255)
-  phone          String?   @db.VarChar(50)
-  address        String?
-  city           String?   @db.VarChar(100)
-  state          String?   @db.VarChar(100)
-  country        String?   @db.VarChar(100)
-  postal_code    String?   @db.VarChar(20)
-  category       String?   @db.VarChar(100)
-  payment_terms  String?   @db.VarChar(100)
-  tax_id         String?   @db.VarChar(100)
-  bank_details   String?
-  is_active      Boolean?  @default(true)
-  created_at     DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime? @default(now()) @db.Timestamptz(6)
+  vendoraccountnumber    String  @id
+  addresscity            String?
+  addresscountryregionid String?
+  addressstateid         String?
+  addressstreet          String?
+  addresszipcode         String?
+  currencycode           String?
+  pannumber              String?
+  panstatus              String?
+  vendorgroupid          String?
+  vendororganizationname String?
+  vendorsearchname       String?
 }

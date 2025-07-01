@@ -21,8 +21,6 @@ import { LineItemsGrid } from "@/components/ui/line-items-grid";
 import { FileUpload } from "@/components/ui/file-upload";
 import type { LineItemFormData } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 // Indian currency formatting function
 const formatIndianCurrency = (amount: number | string) => {
@@ -105,27 +103,18 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [calendarOpen, setCalendarOpen] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    getValues,
-    formState: { errors },
-    control,
-    reset,
+  const {register,handleSubmit,setValue,getValues,formState: { errors },control,reset,
   } = useForm<RequestDetailsFormData>({
     resolver: zodResolver(requestDetailsSchema),
     defaultValues: initialData ? {
       title: initialData.title,
-      requestDate: initialData.requestDate?.split('T')[0],
+      requestDate: initialData.requestDate ? formatToDDMMYYYY(new Date(initialData.requestDate)) : formatToDDMMYYYY(new Date()),
       department: initialData.department,
       location: initialData.location,
       businessJustificationCode: initialData.businessJustificationCode,
       businessJustificationDetails: initialData.businessJustificationDetails,
     } : {
-      requestDate: new Date().toISOString().split('T')[0],
+      requestDate: formatToDDMMYYYY(new Date()),
     },
   });
 
@@ -167,7 +156,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
 
     const requestData = {
       ...formData,
-      requestDate: new Date(formData.requestDate),
+      requestDate: parseDDMMYYYY(formData.requestDate),
       totalEstimatedCost: totalCost.toFixed(2),
     };
 
@@ -203,31 +192,12 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
 
                 <div>
                   <Label htmlFor="requestDate">Request Date</Label>
-                  <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="w-full border rounded px-3 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        onClick={() => setCalendarOpen(true)}
-                      >
-                        {getValues("requestDate")
-                          ? formatDate(getValues("requestDate"))
-                          : <span className="text-gray-400">Select date</span>}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="p-0 w-auto">
-                      <Calendar
-                        mode="single"
-                        selected={parseDDMMYYYY(getValues("requestDate"))}
-                        onSelect={(date) => {
-                          setValue("requestDate", formatToDDMMYYYY(date));
-                          setCalendarOpen(false);
-                        }}
-                        fromDate={new Date()}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy</p>
+                  <Input
+                    id="requestDate"
+                    {...register("requestDate")}
+                    readOnly
+                    className="bg-gray-100 cursor-not-allowed"
+                  />
                   {errors.requestDate && (
                     <p className="text-sm text-destructive mt-1">{errors.requestDate.message}</p>
                   )}
@@ -430,7 +400,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                   </div>
                   <div>
                     <span className="block text-gray-500">Request Date</span>
-                    <span className="font-medium text-gray-900">{formatDate(getValues("requestDate"))}</span>
+                    <span className="font-medium text-gray-900">{getValues("requestDate")}</span>
                   </div>
                   <div>
                     <span className="block text-gray-500">Department</span>
