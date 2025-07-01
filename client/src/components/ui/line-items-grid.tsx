@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Edit2, Trash2, Package, AlertCircle, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,25 +50,29 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
     stockLocation: "",
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
 
-  // Fetch inventory for stock checking
-  const { data: inventoryRaw } = useQuery({
-    queryKey: ["/api/inventory"],
-    enabled: editable
+  // Fetch inventory as user types (autocomplete)
+  const { data: inventory = [] } = useQuery({
+    queryKey: ["inventory-autocomplete", searchTerm],
+    queryFn: async () => {
+      if (!searchTerm) return [];
+      const res = await fetch(`/api/inventory?search=${encodeURIComponent(searchTerm)}`);
+      return res.json();
+    },
+    enabled: !!searchTerm && editable,
   });
-  const inventory = Array.isArray(inventoryRaw) ? inventoryRaw : [];
 
-  // Filter inventory based on search term
-  const filteredInventory = useMemo(() => {
-    if (!searchTerm) return inventory;
-    return inventory.filter((item: any) => 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.itemCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [inventory, searchTerm]);
+  // Helper to filter inventory for dropdown (includes, case-insensitive)
+  const filteredInventory = searchTerm
+    ? inventory.filter((item: any) =>
+        (item.productname && item.productname.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.itemnumber && item.itemnumber.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    : [];
 
   const checkStock = (itemName: string) => {
     return inventory.find((item: any) => 
@@ -213,10 +217,11 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
     return `₹${formatted}.${decimal}`;
   };
 
-  function parseDDMMYYYY(dateStr: string): Date | null {
-    if (!dateStr) return null;
+  // Helper to parse dd-mm-yyyy to Date or undefined
+  function parseDDMMYYYYOrUndefined(dateStr: string): Date | undefined {
+    if (!dateStr) return undefined;
     const [day, month, year] = dateStr.split("-");
-    if (!day || !month || !year) return null;
+    if (!day || !month || !year) return undefined;
     return new Date(Number(year), Number(month) - 1, Number(day));
   }
 
@@ -252,60 +257,87 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <Label htmlFor="itemName">Item Name</Label>
-                  
-                  {/* Search Input */}
+                  {/* Unified Search/Input */}
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
-                      placeholder="Search inventory items..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-
-                  {/* Inventory Dropdown */}
-                  {searchTerm && filteredInventory.length > 0 && (
-                    <div className="border rounded-md max-h-48 overflow-y-auto mb-2 bg-white shadow-sm">
-                      {filteredInventory.map((item: any) => (
-                        <div
-                          key={item.id}
-                          className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                          onClick={() => {
+                      id="itemName"
+                      ref={inputRef}
+                      placeholder="Search or enter item name"
+                      value={formData.itemName || searchTerm}
+                      onChange={e => {
+                        setSearchTerm(e.target.value);
+                        setFormData({ ...formData, itemName: e.target.value });
+                        setSelectedInventoryItem(null);
+                        setFormData(f => ({ ...f, unitOfMeasure: "" }));
+                        setHighlightedIndex(-1);
+                      }}
+                      onKeyDown={e => {
+                        if (filteredInventory.length === 0) return;
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setHighlightedIndex(idx => (idx + 1) % filteredInventory.length);
+                        } else if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setHighlightedIndex(idx => (idx - 1 + filteredInventory.length) % filteredInventory.length);
+                        } else if (e.key === "Enter") {
+                          if (highlightedIndex >= 0 && highlightedIndex < filteredInventory.length) {
+                            const item = filteredInventory[highlightedIndex];
                             setSelectedInventoryItem(item);
                             setFormData({
                               ...formData,
-                              itemName: item.name,
-                              requiredQuantity: Math.min(5, item.quantity || 1), // Default to 5 or available stock
-                              estimatedCost: item.unitCost || 0,
-                              unitOfMeasure: item.unitOfMeasure || "",
-                              stockAvailable: item.quantity || 0,
-                              stockLocation: item.location || ""
+                              itemName: item.productname || item.itemnumber,
+                              requiredQuantity: 1,
+                              estimatedCost: item.unitcost || 0,
+                              unitOfMeasure: item.bomunitsymbol || "",
+                              stockAvailable: item.stockavailable || 0,
+                              stockLocation: item.stocklocation || ""
                             });
                             setSearchTerm("");
-                          }}
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-medium">{item.name}</span>
-                            <span className="text-sm text-gray-500">
-                              Code: {item.itemCode} | Stock: {item.quantity} {item.unitOfMeasure} | ₹{item.unitCost}
-                            </span>
+                            setHighlightedIndex(-1);
+                          }
+                        }
+                      }}
+                      className="pl-10"
+                      autoComplete="off"
+                    />
+                    {/* Inventory Dropdown */}
+                    {searchTerm && filteredInventory.length > 0 && (
+                      <div className="border rounded-md max-h-48 overflow-y-auto mb-2 bg-white shadow-sm absolute z-10 w-full">
+                        {filteredInventory.map((item: any, idx: number) => (
+                          <div
+                            key={item.itemnumber}
+                            className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${highlightedIndex === idx ? "bg-blue-100" : ""}`}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                            onMouseLeave={() => setHighlightedIndex(-1)}
+                            onClick={() => {
+                              setSelectedInventoryItem(item);
+                              setFormData({
+                                ...formData,
+                                itemName: item.productname || item.itemnumber,
+                                requiredQuantity: 1,
+                                estimatedCost: item.unitcost || 0,
+                                unitOfMeasure: item.bomunitsymbol || "",
+                                stockAvailable: item.stockavailable || 0,
+                                stockLocation: item.stocklocation || ""
+                              });
+                              setSearchTerm("");
+                              setHighlightedIndex(-1);
+                              // Refocus input after click
+                              setTimeout(() => inputRef.current?.focus(), 0);
+                            }}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">{item.productname || item.itemnumber}</span>
+                              <span className="text-sm text-gray-500">
+                                Code: {item.itemnumber} {item.bomunitsymbol ? `| UOM: ${item.bomunitsymbol}` : ""}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Manual Item Entry */}
-                  <Input
-                    placeholder="Or enter custom item name"
-                    value={formData.itemName}
-                    onChange={(e) => {
-                      setFormData({...formData, itemName: e.target.value});
-                      setSelectedInventoryItem(null);
-                    }}
-                    className="text-sm"
-                  />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="requiredQuantity">Required Quantity</Label>
@@ -317,7 +349,6 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                       const requestedQty = parseInt(e.target.value) || 1;
                       setFormData({...formData, requiredQuantity: requestedQty});
                     }}
-                    placeholder="1"
                     min="1"
                   />
                   {selectedInventoryItem && formData.requiredQuantity > selectedInventoryItem.quantity && (
@@ -331,29 +362,16 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     </div>
                   )}
                 </div>
-                <div className="mt-2">
-                  <Label>Current Stock</Label>
-                  <Input value={selectedInventoryItem?.quantity ?? ''} readOnly className="bg-gray-100" />
-                </div>
-                <div className="mt-2">
-                  <Label>Required - Stock</Label>
-                  <Input value={getRequiredMinusStock() ?? ''} readOnly className="bg-gray-100" />
-                </div>
                 <div>
                   <Label htmlFor="unitOfMeasure">Unit of Measure</Label>
-                  <Select value={formData.unitOfMeasure} onValueChange={(value) => setFormData({...formData, unitOfMeasure: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select unit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pcs">Pieces</SelectItem>
-                      <SelectItem value="kg">Kilograms</SelectItem>
-                      <SelectItem value="ltr">Liters</SelectItem>
-                      <SelectItem value="box">Box</SelectItem>
-                      <SelectItem value="set">Set</SelectItem>
-                      <SelectItem value="mtr">Meters</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="unitOfMeasure"
+                    value={formData.unitOfMeasure}
+                    readOnly={!!selectedInventoryItem}
+                    placeholder="Unit of measure"
+                    className={selectedInventoryItem ? "bg-gray-100 cursor-not-allowed" : ""}
+                    onChange={e => setFormData({ ...formData, unitOfMeasure: e.target.value })}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="requiredByDate">Required By Date</Label>
@@ -372,9 +390,9 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <PopoverContent align="start" className="p-0 w-auto">
                       <Calendar
                         mode="single"
-                        selected={parseDDMMYYYY(formData.requiredByDate)}
+                        selected={parseDDMMYYYYOrUndefined(formData.requiredByDate)}
                         onSelect={(date) => {
-                          setFormData({ ...formData, requiredByDate: formatToDDMMYYYY(date) });
+                          setFormData({ ...formData, requiredByDate: formatToDDMMYYYY(date ?? null) });
                           setCalendarOpen(false);
                         }}
                         fromDate={new Date()}

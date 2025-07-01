@@ -3,8 +3,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Search } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -16,6 +14,7 @@ import type { LineItemFormData } from "@/lib/types";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { formatDate } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 const lineItemSchema = z.object({
   itemName: z.string().min(1, "Item name is required"),
@@ -37,8 +36,8 @@ const formatIndianCurrency = (amount: number | string) => {
   const num = parseFloat(amount.toString());
   if (isNaN(num)) return "₹0.00";
   const numStr = num.toFixed(2);
-  const [integer, decimal] = numStr.split('.');
-  let formatted = '';
+  const [integer, decimal] = numStr.split(".");
+  let formatted = "";
   const integerStr = integer;
   if (integerStr.length <= 3) {
     formatted = integerStr;
@@ -47,10 +46,10 @@ const formatIndianCurrency = (amount: number | string) => {
     let remaining = integerStr.slice(0, -3);
     while (remaining.length > 0) {
       if (remaining.length <= 2) {
-        result = remaining + ',' + result;
+        result = remaining + "," + result;
         break;
       } else {
-        result = remaining.slice(-2) + ',' + result;
+        result = remaining.slice(-2) + "," + result;
         remaining = remaining.slice(0, -2);
       }
     }
@@ -60,11 +59,10 @@ const formatIndianCurrency = (amount: number | string) => {
 };
 
 export function LineItemForm({ onAddItem }: LineItemFormProps) {
+  console.log("LineItemForm rendered");
   const [open, setOpen] = useState(false);
-  const [selectedStock, setSelectedStock] = useState<number | null>(null);
-  const [quantityDiff, setQuantityDiff] = useState<number | null>(null);
-  const [stockError, setStockError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [itemSearch, setItemSearch] = useState("");
 
   const {
     register,
@@ -77,45 +75,25 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
     resolver: zodResolver(lineItemSchema),
   });
 
-  const { data: inventory } = useQuery({ queryKey: ["/api/inventory"] });
+  // Fetch inventory as user types
+  const { data: inventory = [] } = useQuery({
+    queryKey: ["inventory-autocomplete", itemSearch],
+    queryFn: async () => {
+      const res = await fetch(`/api/inventory?search=${encodeURIComponent(itemSearch || "")}`);
+      return res.json();
+    },
+  });
 
-  const handleItemNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value;
-    setValue("itemName", name);
-    const stock = inventory?.find((item: any) => item.name === name)?.quantity ?? null;
-    setSelectedStock(stock);
-    const reqQty = Number(getValues("requiredQuantity"));
-    if (stock !== null && reqQty) {
-      setQuantityDiff(reqQty - stock);
-      if (reqQty - stock <= 0) {
-        setStockError("Required quantity of item is already in stock. Select another item.");
-      } else {
-        setStockError(null);
-      }
-    } else {
-      setQuantityDiff(null);
-      setStockError(null);
-    }
-  };
+  // Helper to filter inventory for dropdown (includes, case-insensitive)
+  const filteredInventory = itemSearch
+    ? inventory.filter((item: any) =>
+        (item.productname && item.productname.toLowerCase().includes(itemSearch.toLowerCase())) ||
+        (item.itemnumber && item.itemnumber.toLowerCase().includes(itemSearch.toLowerCase()))
+      )
+    : [];
 
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const qty = Number(e.target.value);
-    setValue("requiredQuantity", qty);
-    const name = getValues("itemName");
-    const stock = inventory?.find((item: any) => item.name === name)?.quantity ?? null;
-    setSelectedStock(stock);
-    if (stock !== null && qty) {
-      setQuantityDiff(qty - stock);
-      if (qty - stock <= 0) {
-        setStockError("Required quantity of item is already in stock. Select another item.");
-      } else {
-        setStockError(null);
-      }
-    } else {
-      setQuantityDiff(null);
-      setStockError(null);
-    }
-  };
+  // Debug log
+  console.log("Inventory:", inventory, "Filtered:", filteredInventory, "Search:", itemSearch);
 
   // Helper to parse dd-mm-yyyy to Date
   function parseDDMMYYYY(dateStr: string): Date | null {
@@ -128,27 +106,16 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
   // Helper to format Date to dd-mm-yyyy
   function formatToDDMMYYYY(date: Date | null): string {
     if (!date) return "";
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
     const year = date.getFullYear();
     return `${day}-${month}-${year}`;
   }
 
   const onSubmit = (data: LineItemFormData) => {
-    if (quantityDiff !== null && quantityDiff <= 0) {
-      setStockError("Required quantity of item is already in stock. Select another item.");
-      return;
-    }
-    const finalData = {
-      ...data,
-      requiredQuantity: quantityDiff ?? data.requiredQuantity,
-    };
-    onAddItem(finalData);
+    onAddItem(data);
     reset();
     setOpen(false);
-    setSelectedStock(null);
-    setQuantityDiff(null);
-    setStockError(null);
   };
 
   return (
@@ -173,9 +140,36 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                   {...register("itemName")}
                   placeholder="Search or enter item name"
                   className="pr-10"
-                  onChange={handleItemNameChange}
+                  value={itemSearch || getValues("itemName")}
+                  onChange={e => {
+                    setItemSearch(e.target.value);
+                    setValue("itemName", e.target.value);
+                  }}
+                  autoComplete="off"
                 />
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                {/* Dropdown for inventory search */}
+                {itemSearch && filteredInventory.length > 0 && (
+                  <div className="absolute z-10 left-0 right-0 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1">
+                    {filteredInventory.map((item: any) => (
+                      <div
+                        key={item.itemnumber}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                        onClick={() => {
+                          setValue("itemName", item.productname || item.itemnumber);
+                          setValue("unitOfMeasure", item.bomunitsymbol || "");
+                          setItemSearch(item.productname || item.itemnumber);
+                        }}
+                      >
+                        <div className="font-medium">{item.productname || item.itemnumber}</div>
+                        <div className="text-xs text-gray-500">Code: {item.itemnumber}</div>
+                        {item.bomunitsymbol && (
+                          <div className="text-xs text-gray-400">UOM: {item.bomunitsymbol}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {errors.itemName && (
                 <p className="text-sm text-destructive mt-1">{errors.itemName.message}</p>
@@ -190,7 +184,6 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                 {...register("requiredQuantity", { valueAsNumber: true })}
                 placeholder="0"
                 min="1"
-                onChange={handleQuantityChange}
               />
               {errors.requiredQuantity && (
                 <p className="text-sm text-destructive mt-1">{errors.requiredQuantity.message}</p>
@@ -199,18 +192,13 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
 
             <div>
               <Label htmlFor="unitOfMeasure">Unit of Measure *</Label>
-              <Select onValueChange={(value) => setValue("unitOfMeasure", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select UOM" />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNITS_OF_MEASURE.map((unit) => (
-                    <SelectItem key={unit.value} value={unit.value}>
-                      {unit.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="unitOfMeasure"
+                {...register("unitOfMeasure")}
+                placeholder="Unit of measure"
+                readOnly
+                className="bg-gray-100 cursor-not-allowed"
+              />
               {errors.unitOfMeasure && (
                 <p className="text-sm text-destructive mt-1">{errors.unitOfMeasure.message}</p>
               )}
@@ -297,23 +285,6 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
               />
               {errors.itemJustification && (
                 <p className="text-sm text-destructive mt-1">{errors.itemJustification.message}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Always visible stock fields below the grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-            <div>
-              <Label>Current Stock</Label>
-              <Input value={selectedStock ?? ""} readOnly className="bg-gray-100" />
-            </div>
-            <div>
-              <Label>Required - Stock</Label>
-              <Input value={quantityDiff ?? ""} readOnly className="bg-gray-100" />
-            </div>
-            <div className="flex items-end">{/* Error message if any */}
-              {stockError && (
-                <p className="text-sm text-destructive mt-1">{stockError}</p>
               )}
             </div>
           </div>

@@ -156,13 +156,13 @@ export function registerRoutes(app: Express): Server {
       }
 
       req.session.user = {
-        id: user.emp_code,
-        employeeNumber: user.emp_code,
-        fullName: user.name,
-        email: user.email,
-        department: user.department,
-        location: user.location,
-        role: user.role,
+        id: String(user.emp_code),
+        employeeNumber: String(user.emp_code),
+        fullName: user.name ?? "",
+        email: user.email ?? "",
+        department: user.department ?? "",
+        location: user.location ?? "",
+        role: user.role ?? "",
       };
 
       res.json({ user: req.session.user });
@@ -207,13 +207,13 @@ export function registerRoutes(app: Express): Server {
       });
 
       req.session.user = {
-        id: newUser.emp_code,
-        employeeNumber: newUser.emp_code,
-        fullName: newUser.name,
-        email: newUser.email,
-        department: newUser.department,
-        location: newUser.location,
-        role: newUser.role,
+        id: String(newUser.emp_code),
+        employeeNumber: String(newUser.emp_code),
+        fullName: newUser.name ?? "",
+        email: newUser.email ?? "",
+        department: newUser.department ?? "",
+        location: newUser.location ?? "",
+        role: newUser.role ?? "",
       };
 
       res.status(201).json({ user: req.session.user, message: "User created. Please proceed to login and reset your password if prompted." });
@@ -456,7 +456,8 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/admin/users', requireAuth, requireRole(['admin']), async (req: any, res) => {
     try {
-      const users = await storage.getAllUsers();
+      const search = (req.query.search as string) || "";
+      const users = await storage.getAllUsers(search);
       res.json(users);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -464,47 +465,40 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-    app.get('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
-        try {
-            const { type } = req.params;
-            // 1. Extract and parse parameters from the query string sent by the frontend
-            const page = parseInt(req.query.page as string) || 1;
-            const pageSize = parseInt(req.query.pageSize as string) || 10;
-            const search = (req.query.search as string) || '';
-            // 2. Bundle these parameters into a single 'options' object
-            const options = { page, pageSize, search };
-            // This variable will hold the { data, totalCount } object from the storage layer
-            let result: { data: any[], totalCount: number };
-
-            // 3. Pass the SINGLE 'options' object to the correct storage function
-            switch (type) {
-                case 'users':
-                    result = await storage.getAllUsers(options);
-                    break;
-                case 'departments':
-                    result = await storage.getAllDepartments(options);
-                    break;
-                case 'sites':
-                    result = await storage.getAllSites(options);
-                    break;
-                case 'approval-matrix':
-                    result = await storage.getAllApprovalMatrix(options);
-                    break;
-                // You can add more cases here as you implement them in storage.ts
-                // e.g., case 'vendors': result = await storage.getAllVendors(options); break;
-                default:
-                    // For types not yet implemented, return an empty result to avoid frontend errors
-                    console.warn(`WARN: GET request for unimplemented master type: ${type}`);
-                    return res.json({ data: [], totalCount: 0 });
-            }
-
-            // 4. Send the entire result object back to the frontend
-            res.json(result);
-        } catch (error) {
-            console.error(`Error fetching ${req.params.type} master data:`, error);
-            res.status(500).json({ message: `Failed to fetch ${req.params.type} data` });
-        }
-    });
+  app.get('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
+    try {
+      const { type } = req.params;
+      const search = (req.query.search as string) || '';
+      let result;
+      switch (type) {
+        case 'users':
+          result = await storage.getAllUsers(search);
+          break;
+        case 'departments':
+          result = await storage.getAllDepartments(search);
+          break;
+        case 'sites':
+          result = await storage.getAllSites(search);
+          break;
+        case 'approval-matrix':
+          result = await storage.getAllApprovalMatrix(search);
+          break;
+        case 'inventory':
+          result = await storage.getAllInventory(search);
+          break;
+        case 'vendors':
+          result = await storage.getAllVendors(search);
+          break;
+        default:
+          console.warn(`WARN: GET request for unimplemented master type: ${type}`);
+          return res.json([]);
+      }
+      res.json(result);
+    } catch (error) {
+      console.error(`Error fetching ${req.params.type} master data:`, error);
+      res.status(500).json({ message: `Failed to fetch ${req.params.type} data` });
+    }
+  });
 
   app.post('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
     try {
@@ -602,7 +596,9 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/inventory', requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Inventory is not enabled with the current database schema." });
+      const search = (req.query.search as string) || "";
+      const inventory = await storage.getAllInventory(search);
+      res.json(inventory);
     } catch (error) {
       console.error('Error fetching inventory:', error);
       res.status(500).json({ message: 'Failed to fetch inventory' });
