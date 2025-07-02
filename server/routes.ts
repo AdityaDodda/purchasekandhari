@@ -506,24 +506,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/notifications", requireAuth, async (req: any, res) => {
-    try {
-      return res.status(501).json({ message: "Feature not implemented: Notifications are not enabled with the current database schema." });
-    } catch (error) {
-      console.error("Get notifications error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.put("/api/notifications/:id/read", requireAuth, async (req, res) => {
-    try {
-      return res.status(501).json({ message: "Feature not implemented: Notifications are not enabled with the current database schema." });
-    } catch (error) {
-      console.error("Mark notification as read error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   app.get('/api/reports/purchase-requests', requireAuth, async (req: any, res) => {
     try {
       const requests = await storage.getAllPurchaseRequests();

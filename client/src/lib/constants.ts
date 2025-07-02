@@ -58,10 +58,3 @@ export const USER_ROLES = [
   { value: "approver", label: "Approver" },
   { value: "admin", label: "Admin" },
 ];
-
-export const NOTIFICATION_TYPES = [
-  { value: "info", label: "Information" },
-  { value: "warning", label: "Warning" },
-  { value: "success", label: "Success" },
-  { value: "error", label: "Error" },
-];

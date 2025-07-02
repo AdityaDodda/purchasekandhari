@@ -16,7 +16,6 @@ type LineItem = any;
 type Attachment = any;
 type ApprovalHistory = any;
 type ApprovalWorkflow = any;
-type Notification = any;
 type Entity = any;
 type Location = any;
 type Role = any;
@@ -42,7 +41,6 @@ type InsertPurchaseRequest = any;
 type InsertLineItem = any;
 type InsertAttachment = any;
 type InsertApprovalHistory = any;
-type InsertNotification = any;
 type InsertEntity = any;
 type InsertLocation = any;
 type InsertRole = any;
@@ -113,11 +111,6 @@ export interface IStorage {
   createLocation(location: InsertLocation): Promise<Location>;
   updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location>;
   deleteLocation(id: number): Promise<void>;
-
-  // getAllRoles(search?: string): Promise<Role[]>;
-  // createRole(role: InsertRole): Promise<Role>;
-  // updateRole(id: number, role: Partial<InsertRole>): Promise<Role>;
-  // deleteRole(id: number): Promise<void>;
 
   getAllApprovalMatrix(search?: string): Promise<ApprovalMatrix[]>;
   createApprovalMatrix(matrix: InsertApprovalMatrix): Promise<ApprovalMatrix>;
@@ -361,24 +354,7 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
 
-  async createNotification(notification: InsertNotification): Promise<Notification> {
-    throw new Error("Method not implemented.");
-  }
-  async getNotification(id: number): Promise<Notification | null> {
-    throw new Error("Method not implemented.");
-  }
-  async getAllNotifications(): Promise<Notification[]> {
-    throw new Error("Method not implemented.");
-  }
-  async updateNotification(id: number, notification: Partial<InsertNotification>): Promise<Notification> {
-    throw new Error("Method not implemented.");
-  }
-  async deleteNotification(id: number): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-
-
-  // MASTER DATA IMPLEMENTATIONS (UPDATED FOR PAGINATION/SEARCH)
+// MASTER DATA IMPLEMENTATIONS (UPDATED FOR PAGINATION/SEARCH)
 
   // Users Master
   async getAllUsers(search?: string): Promise<User[]> {
@@ -451,20 +427,6 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
 
-  // Role Master
-  async getAllRoles(search?: string): Promise<Role[]> {
-    throw new Error("ERR: getAllRoles not implemented. Role model is missing from schema.prisma.");
-  }
-  async createRole(role: InsertRole): Promise<Role> {
-    throw new Error("Method not implemented.");
-  }
-  async updateRole(id: number, role: Partial<InsertRole>): Promise<Role> {
-    throw new Error("Method not implemented.");
-  }
-  async deleteRole(id: number): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-
   // Approval Matrix
   async getAllApprovalMatrix(search?: string): Promise<ApprovalMatrix[]> {
     const where: Prisma.approval_matrixWhereInput = search
@@ -506,7 +468,7 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
 
-  // Inventory Master - FULLY IMPLEMENTED
+  // Inventory Master
   async getAllInventory(search?: string): Promise<Inventory[]> {
     const where: Prisma.inventoryWhereInput = search
       ? {
@@ -529,19 +491,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateInventory(itemNumber: string, itemData: UpdateInventory): Promise<Inventory> {
-    // Note: The original Drizzle code had `updatedAt: new Date()`.
-    // Your Prisma schema does not have an `updatedAt` field.
-    // If you need it, add `updatedAt DateTime @updatedAt` to your schema.prisma.
-    // For now, it's excluded from `itemData`.
     return this.prisma.inventory.update({
-      where: { itemnumber: itemNumber }, // Primary key is itemnumber (string)
+      where: { itemnumber: itemNumber },
       data: itemData,
     });
   }
 
   async deleteInventory(itemNumber: string): Promise<void> {
     await this.prisma.inventory.delete({
-      where: { itemnumber: itemNumber }, // Primary key is itemnumber (string)
+      where: { itemnumber: itemNumber },
     });
   }
 

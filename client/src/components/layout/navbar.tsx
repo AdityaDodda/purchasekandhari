@@ -15,21 +15,6 @@ export function Navbar() {
   const queryClient = useQueryClient();
 
   const { data: user } = useQuery({ queryKey: ["/api/auth/user"] });
-  const { data: notifications } = useQuery({ queryKey: ["/api/notifications"] });
-
-  const markNotificationAsReadMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("PUT", `/api/notifications/${id}/read`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-  });
-
-  const markNotificationAsRead = (id: number) => {
-    markNotificationAsReadMutation.mutate(id);
-  };
-
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/logout");
@@ -37,7 +22,6 @@ export function Navbar() {
     onSuccess: () => {
       queryClient.clear();
       queryClient.removeQueries({ queryKey: ["/api/auth/user"] });
-      queryClient.removeQueries({ queryKey: ["/api/notifications"] });
       queryClient.removeQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.removeQueries({ queryKey: ["/api/purchase-requests"] });
 
@@ -52,10 +36,6 @@ export function Navbar() {
       });
     },
   });
-
-  const unreadNotifications = Array.isArray(notifications)
-    ? notifications.filter((n: any) => !n.isRead)
-    : [];
 
   const handleNavigation = (path: string) => setLocation(path);
   const handleLogout = () => logoutMutation.mutate();
@@ -99,69 +79,6 @@ export function Navbar() {
 
           {/* Right Section */}
           <div className="flex items-center space-x-6">
-            {/* Notifications
-            <div className="relative">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" 
-                    className="relative text-white hover:text-[hsl(32,100%,50%)] hover:bg-white/10 transition-colors duration-200 p-2">
-                    <Bell className="h-5 w-5" />
-                    {notifications && notifications.filter((n: any) => !n.isRead).length > 0 && (
-                      <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs bg-red-500 hover:bg-red-500">
-                        {notifications.filter((n: any) => !n.isRead).length}
-                      </Badge>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent 
-                  align="end" 
-                  className="w-80 max-h-96 overflow-y-auto"
-                  sideOffset={5}>
-
-                  <div className="px-3 py-2 border-b">
-                    <h3 className="font-semibold text-sm">Notifications</h3>
-                  </div>
-                  {notifications && notifications.length > 0 ? (
-                    notifications.slice(0, 10).map((notification: any) => (
-                      <DropdownMenuItem 
-                        key={notification.id}
-                        className={`px-3 py-3 cursor-pointer hover:bg-gray-50 ${!notification.isRead ? 'bg-blue-50' : ''}`}
-                        onClick={() => markNotificationAsRead(notification.id)}>
-                        <div className="w-full">
-                          <div className="flex justify-between items-start mb-1">
-                            <h4 className="font-medium text-sm text-gray-900 truncate pr-2">
-                              {notification.title}
-                            </h4>
-                            {!notification.isRead && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-600 line-clamp-2 mb-1">
-                            {notification.message}
-                          </p>
-                          <div className="text-xs text-gray-500">
-                            {formatDateTime(notification.createdAt)}
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                    ))
-                  ) : (
-                    <div className="px-3 py-8 text-center text-gray-500">
-                      <Bell className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No notifications</p>
-                    </div>
-                  )}
-                  {notifications && notifications.length > 10 && (
-                    <div className="px-3 py-2 border-t text-center">
-                      <button className="text-xs text-blue-600 hover:text-blue-800">
-                        View all notifications
-                      </button>
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div> */}
-
             {/* User Dropdown */}
             <div className="relative">
               <DropdownMenu>

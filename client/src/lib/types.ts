@@ -129,17 +129,6 @@ export interface ApprovalHistory {
   approverEmployeeNumber?: string;
 }
 
-export interface Notification {
-  id: number;
-  userId: number;
-  purchaseRequestId?: number;
-  title: string;
-  message: string;
-  type: string;
-  isRead: boolean;
-  createdAt?: string;
-}
-
 export interface DashboardStats {
   totalRequests: number;
   pendingRequests: number;
