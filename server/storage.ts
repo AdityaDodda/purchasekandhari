@@ -230,6 +230,23 @@ export class DatabaseStorage implements IStorage {
     }>;
   }): Promise<any> {
     const pr_number = await this.generateRequisitionNumber(data.entity);
+    // Try to find approval matrix row by department and location first
+    let approvalMatrix = await this.prisma.approval_matrix.findFirst({
+      where: {
+        department: data.department,
+        site: data.location,
+      },
+    });
+    // Fallback to emp_code if not found
+    if (!approvalMatrix) {
+      approvalMatrix = await this.prisma.approval_matrix.findUnique({
+        where: { emp_code: data.requesterEmpCode },
+      });
+    }
+    const firstApproverEmpCode = approvalMatrix?.approver_1_emp_code;
+    if (!firstApproverEmpCode) {
+      throw new Error('No valid first approver found in approval matrix for this request.');
+    }
     return this.prisma.$transaction(async (tx) => {
       const pr = await tx.purchase_requests.create({
         data: {
@@ -245,6 +262,8 @@ export class DatabaseStorage implements IStorage {
           status: data.status && ["rejected","returned","pending","approved"].includes(data.status) ? data.status : "pending",
           created_by: data.createdBy,
           updated_by: data.updatedBy,
+          current_approver_emp_code: firstApproverEmpCode,
+          current_approval_level: 1,
         },
       });
       const lineItems = await Promise.all(
@@ -260,6 +279,8 @@ export class DatabaseStorage implements IStorage {
               deliverylocation: item.deliverylocation,
               estimated_cost: item.estimated_cost,
               item_justification: item.item_justification || null,
+              created_by: data.createdBy,
+              updated_by: data.updatedBy,
             },
           })
         )
@@ -272,13 +293,54 @@ export class DatabaseStorage implements IStorage {
   async getPurchaseRequest(id: string): Promise<PurchaseRequest | null> {
     throw new Error("Method not implemented.");
   }
-  async getAllPurchaseRequests(): Promise<PurchaseRequest[]> {
-    return this.prisma.purchase_requests.findMany({
+  async getAllPurchaseRequests(filters: any = {}): Promise<any[]> {
+    const where: any = {};
+    if (filters.createdBy) {
+      // Support both created_by and requester_emp_code for legacy compatibility
+      where.OR = [
+        { created_by: filters.createdBy },
+        { requester_emp_code: filters.createdBy },
+      ];
+    }
+    if (filters.currentApproverId) {
+      where.current_approver_emp_code = filters.currentApproverId;
+    }
+    if (filters.status) {
+      where.status = filters.status;
+    }
+    if (filters.department) {
+      where.department = filters.department;
+    }
+    if (filters.location) {
+      where.location = filters.location;
+    }
+    const requests = await this.prisma.purchase_requests.findMany({
+      where,
       orderBy: { created_at: 'desc' },
       include: {
         line_items: true,
       },
     });
+    // Map DB fields to API fields expected by frontend
+    return requests.map((req: any) => ({
+      id: req.pr_number, // Map pr_number to id
+      requisitionNumber: req.pr_number, // Also provide as requisitionNumber
+      title: req.title,
+      requestDate: req.request_date,
+      department: req.department,
+      location: req.location,
+      businessJustificationCode: req.business_justification_code,
+      businessJustificationDetails: req.business_justification_details,
+      status: req.status,
+      currentApprovalLevel: req.current_approval_level,
+      totalEstimatedCost: req.total_estimated_cost,
+      requesterId: req.requester_emp_code,
+      currentApproverId: req.current_approver_emp_code,
+      createdAt: req.created_at,
+      updatedAt: req.updated_at,
+      lineItems: req.line_items,
+      // Add more fields as needed
+    }));
   }
   async updatePurchaseRequest(id: string, request: Partial<InsertPurchaseRequest>): Promise<PurchaseRequest> {
     throw new Error("Method not implemented.");
@@ -570,6 +632,19 @@ export class DatabaseStorage implements IStorage {
     return this.prisma.attachments.findMany({
       where: { purchase_request_id: prNumber },
       orderBy: { uploaded_at: 'desc' },
+    });
+  }
+
+  async getPurchaseRequestWithLineItems(pr_number: string): Promise<any> {
+    return this.prisma.purchase_requests.findUnique({
+      where: { pr_number },
+      include: {
+        line_items: {
+          include: {
+            vendors: true,
+          },
+        },
+      },
     });
   }
 }

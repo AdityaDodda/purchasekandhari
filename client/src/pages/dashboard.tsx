@@ -25,7 +25,27 @@ import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
 type User = {
   id: string;
   role: string;
+  emp_code: string;
 };
+
+// Add types for stats and requests
+interface DashboardStats {
+  totalRequests?: number;
+  pendingRequests?: number;
+  approvedRequests?: number;
+  rejectedRequests?: number;
+}
+
+interface PurchaseRequest {
+  id: string;
+  requisitionNumber: string;
+  title: string;
+  department: string;
+  status: string;
+  requestDate: string;
+  lineItems?: any[];
+  [key: string]: any;
+}
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -35,7 +55,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
 
@@ -43,22 +63,18 @@ export default function Dashboard() {
 
   let queryParams: Record<string, any> = {};
   if (activeView === 'approver' && user) {
-    queryParams = { currentApproverId: user.id, status: 'pending' };
+    queryParams = { currentApproverId: user.emp_code, status: 'pending' };
   } else if (activeView === 'pending') {
-    if (user?.role === 'approver') {
-      queryParams = { currentApproverId: user.id, status: 'pending' };
-    } else {
-      queryParams = { status: 'pending' };
-    }
+    queryParams = { currentApproverId: user?.emp_code, status: 'pending' };
   } else if (activeView === 'my') {
-    queryParams = { createdBy: user?.id };
+    queryParams = { createdBy: user?.emp_code };
   }
 
-  const { data: requests, isLoading: isLoadingRequests } = useQuery({
+  const { data: requests, isLoading: isLoadingRequests } = useQuery<PurchaseRequest[]>({
     queryKey: ["/api/purchase-requests", queryParams],
   });
 
-  const { data: requestDetails, isLoading: isLoadingDetails } = useQuery({
+  const { data: requestDetails, isLoading: isLoadingDetails } = useQuery<PurchaseRequest>({
     queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
     enabled: !!selectedRequest?.id,
   });
@@ -196,7 +212,7 @@ export default function Dashboard() {
                   ) : Array.isArray(requests) && requests.length > 0 ? (
                     requests
                       .slice((page - 1) * pageSize, page * pageSize)
-                      .map((request: any) => (
+                      .map((request: PurchaseRequest) => (
                         <tr key={request.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {request.requisitionNumber}
@@ -339,13 +355,13 @@ export default function Dashboard() {
                         <span className="text-gray-500">Location:</span>
                         <span className="ml-2 font-medium">{selectedRequest?.location}</span>
                       </div>
-                      <div className="flex items-center text-sm">
+                      {/* <div className="flex items-center text-sm">
                         <DollarSign className="h-4 w-4 mr-2 text-gray-500" />
                         <span className="text-gray-500">Total Cost:</span>
                         <div className="text-2xl font-bold text-green-700">
                           {formatCurrency(selectedRequest?.totalEstimatedCost)}
                         </div>
-                      </div>
+                      </div> */}
                     </CardContent>
                   </Card>
 
@@ -432,7 +448,7 @@ export default function Dashboard() {
   );
 }
 
-function ApprovalProgress({ request }) {
+function ApprovalProgress({ request }: { request: PurchaseRequest }) {
   const { data: workflow } = useQuery({
     queryKey: ["/api/approval-workflow", request.department, request.location],
     enabled: !!request,

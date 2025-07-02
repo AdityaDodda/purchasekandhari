@@ -157,6 +157,7 @@ export function registerRoutes(app: Express): Server {
 
       req.session.user = {
         id: String(user.emp_code),
+        emp_code: String(user.emp_code),
         employeeNumber: String(user.emp_code),
         fullName: user.name ?? "",
         email: user.email ?? "",
@@ -208,6 +209,7 @@ export function registerRoutes(app: Express): Server {
 
       req.session.user = {
         id: String(newUser.emp_code),
+        emp_code: String(newUser.emp_code),
         employeeNumber: String(newUser.emp_code),
         fullName: newUser.name ?? "",
         email: newUser.email ?? "",
@@ -278,6 +280,7 @@ export function registerRoutes(app: Express): Server {
       }
       const safeUser = {
         id: user.emp_code,
+        emp_code: user.emp_code,
         employeeNumber: user.emp_code,
         fullName: user.name,
         email: user.email,
@@ -355,7 +358,25 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/purchase-requests", requireAuth, async (req: any, res) => {
     try {
-      const requests = await storage.getAllPurchaseRequests();
+      // Extract filters from query params
+      const filters: any = {};
+      if (req.query.createdBy) {
+        filters.createdBy = req.query.createdBy;
+      }
+      if (req.query.currentApproverId) {
+        filters.currentApproverId = req.query.currentApproverId;
+      }
+      if (req.query.status) {
+        filters.status = req.query.status;
+      }
+      if (req.query.department) {
+        filters.department = req.query.department;
+      }
+      if (req.query.location) {
+        filters.location = req.query.location;
+      }
+      // Add more filters as needed
+      const requests = await storage.getAllPurchaseRequests(filters);
       res.json(requests);
     } catch (error) {
       console.error("Get purchase requests error:", error);
@@ -365,7 +386,42 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/purchase-requests/:id/details", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Purchase request details are not enabled with the current database schema." });
+      const id = req.params.id;
+      // Use a public method on storage to fetch the request with line items
+      const reqData = await storage.getPurchaseRequestWithLineItems(id);
+      if (!reqData) {
+        return res.status(404).json({ message: "Purchase request not found" });
+      }
+      // Map DB fields to API fields as in getAllPurchaseRequests
+      const result = {
+        id: String(reqData.pr_number),
+        requisitionNumber: String(reqData.pr_number),
+        title: reqData.title,
+        requestDate: reqData.request_date,
+        department: reqData.department,
+        location: reqData.location,
+        businessJustificationCode: reqData.business_justification_code,
+        businessJustificationDetails: reqData.business_justification_details,
+        status: reqData.status,
+        currentApprovalLevel: reqData.current_approval_level,
+        totalEstimatedCost: reqData.total_estimated_cost,
+        requesterId: reqData.requester_emp_code ? String(reqData.requester_emp_code) : undefined,
+        currentApproverId: reqData.current_approver_emp_code ? String(reqData.current_approver_emp_code) : undefined,
+        createdAt: reqData.created_at,
+        updatedAt: reqData.updated_at,
+        lineItems: (reqData.line_items || []).map((item: any) => ({
+          id: item.id,
+          itemName: item.productname,
+          requiredQuantity: item.requiredquantity,
+          unitOfMeasure: item.unit_of_measure,
+          requiredByDate: item.requiredbydate,
+          deliveryLocation: item.deliverylocation,
+          estimatedCost: item.estimated_cost,
+          itemJustification: item.item_justification,
+          vendor: item.vendors ? { vendorsearchname: item.vendors.vendorsearchname } : undefined,
+        })),
+      };
+      res.json(result);
     } catch (error) {
       console.error("Get purchase request details error:", error);
       res.status(500).json({ message: "Internal server error" });
