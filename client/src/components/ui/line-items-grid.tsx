@@ -474,7 +474,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <th className="text-left p-3 font-semibold text-sm border-r">Location</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Unit Cost (₹)</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Total Cost (₹)</th>
-                    <th className="text-left p-3 font-semibold text-sm border-r">Stock Status</th>
+                    {/* <th className="text-left p-3 font-semibold text-sm border-r">Stock Status</th> */}
                     {editable && <th className="text-center p-3 font-semibold text-sm">Actions</th>}
                   </tr>
                 </thead>
@@ -501,7 +501,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                       <td className="p-3 border-r text-sm font-semibold text-green-600">
                         {formatCurrency((item.requiredQuantity || 0) * (parseFloat(item.estimatedCost?.toString() || '0')))}
                       </td>
-                      <td className="p-3 border-r text-sm">
+                      {/* <td className="p-3 border-r text-sm">
                         {getStockBadge(item)}
                         {getStockStatus(item) !== "in-stock" && (
                           <div className="flex items-center text-xs text-amber-600 mt-1">
@@ -511,7 +511,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                               : "Out of stock"}
                           </div>
                         )}
-                      </td>
+                      </td> */}
                       {editable && (
                         <td className="p-3 text-center">
                           <div className="flex justify-center space-x-1">

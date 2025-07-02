@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { Plus, Minus, HelpCircle } from "lucide-react";
 import { useLocation } from "wouter";
+import React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +17,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { DEPARTMENTS, LOCATIONS, BUSINESS_JUSTIFICATION_CODES, UNITS_OF_MEASURE } from "@/lib/constants";
+import { DEPARTMENTS, LOCATIONS, BUSINESS_JUSTIFICATION_CODES } from "@/lib/constants";
 import { LineItemsGrid } from "@/components/ui/line-items-grid";
 import { FileUpload } from "@/components/ui/file-upload";
-import type { LineItemFormData } from "@/lib/types";
+import type { LineItemFormData, User } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 // Indian currency formatting function
@@ -103,20 +104,46 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const {register,handleSubmit,setValue,getValues,formState: { errors },control,reset,
+  const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+
+  // Set up form with user department/location autofill
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    getValues,
+    formState: { errors },
+    control,
+    reset,
   } = useForm<RequestDetailsFormData>({
     resolver: zodResolver(requestDetailsSchema),
-    defaultValues: initialData ? {
-      title: initialData.title,
-      requestDate: initialData.requestDate ? formatToDDMMYYYY(new Date(initialData.requestDate)) : formatToDDMMYYYY(new Date()),
-      department: initialData.department,
-      location: initialData.location,
-      businessJustificationCode: initialData.businessJustificationCode,
-      businessJustificationDetails: initialData.businessJustificationDetails,
-    } : {
-      requestDate: formatToDDMMYYYY(new Date()),
-    },
+    defaultValues: initialData
+      ? {
+          title: initialData.title,
+          requestDate: initialData.requestDate ? formatToDDMMYYYY(new Date(initialData.requestDate)) : formatToDDMMYYYY(new Date()),
+          department: initialData.department,
+          location: initialData.location,
+          businessJustificationCode: initialData.businessJustificationCode,
+          businessJustificationDetails: initialData.businessJustificationDetails,
+        }
+      : user
+      ? {
+          requestDate: formatToDDMMYYYY(new Date()),
+          department: user.department || "",
+          location: user.location || "",
+        }
+      : {
+          requestDate: formatToDDMMYYYY(new Date()),
+        },
   });
+
+  // If user data loads after mount and no initialData, update department/location
+  useEffect(() => {
+    if (!initialData && user) {
+      setValue("department", user.department || "");
+      setValue("location", user.location || "");
+    }
+  }, [user, initialData, setValue]);
 
   const handleNextStep = () => {
     if (currentStep < 4) {
@@ -178,16 +205,27 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
           <CardContent>
             <form onSubmit={handleSubmit(onRequestDetailsSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <Label htmlFor="title">Request Title *</Label>
-                  <Input
-                    id="title"
-                    {...register("title")}
-                    placeholder="Enter request title"
-                  />
-                  {errors.title && (
-                    <p className="text-sm text-destructive mt-1">{errors.title.message}</p>
-                  )}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="title">Request Title *</Label>
+                    <Input
+                      id="title"
+                      {...register("title")}
+                      placeholder="Enter request title"
+                    />
+                    {errors.title && (
+                      <p className="text-sm text-destructive mt-1">{errors.title.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="entity">Entity</Label>
+                    <Input
+                      id="entity"
+                      value={user?.entity || ""}
+                      readOnly
+                      className="bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -205,23 +243,11 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
 
                 <div>
                   <Label htmlFor="department">Department *</Label>
-                  <Controller
-                    name="department"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DEPARTMENTS.map((dept) => (
-                            <SelectItem key={dept.value} value={dept.value}>
-                              {dept.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                  <Input
+                    id="department"
+                    value={DEPARTMENTS.find((dept) => dept.value === getValues("department"))?.label || getValues("department") || ""}
+                    readOnly
+                    className="bg-gray-100 cursor-not-allowed"
                   />
                   {errors.department && (
                     <p className="text-sm text-destructive mt-1">{errors.department.message}</p>
@@ -230,23 +256,11 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
 
                 <div>
                   <Label htmlFor="location">Location *</Label>
-                  <Controller
-                    name="location"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Location" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {LOCATIONS.map((loc) => (
-                            <SelectItem key={loc.value} value={loc.value}>
-                              {loc.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                  <Input
+                    id="location"
+                    value={LOCATIONS.find((loc) => loc.value === getValues("location"))?.label || getValues("location") || ""}
+                    readOnly
+                    className="bg-gray-100 cursor-not-allowed"
                   />
                   {errors.location && (
                     <p className="text-sm text-destructive mt-1">{errors.location.message}</p>

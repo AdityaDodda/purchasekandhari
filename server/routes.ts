@@ -284,6 +284,7 @@ export function registerRoutes(app: Express): Server {
         department: user.department,
         location: user.location,
         role: user.role,
+        entity: user.entity,
       };
       res.json(safeUser);
     } catch (error) {
