@@ -42,22 +42,27 @@ model sites {
 }
 
 model users {
-  emp_code            String           @id @db.VarChar(30)
-  name                String?          @db.VarChar(100)
-  email               String?          @db.VarChar(100)
-  mobile_no           String?          @db.VarChar(20)
-  department          String?          @db.VarChar(50)
-  manager_name        String?          @db.VarChar(100)
-  manager_email       String?          @db.VarChar(100)
-  entity              String?          @db.VarChar(10)
-  location            String?          @db.VarChar(50)
-  site                String?          @db.VarChar(10)
-  role                String?          @db.VarChar(50)
-  description         String?
-  erp_id              String?          @db.VarChar(100)
-  password            String           @default("")
-  must_reset_password Boolean?         @default(true)
-  approval_matrix     approval_matrix?
+  emp_code                                              String              @id @db.VarChar(30)
+  name                                                  String?             @db.VarChar(100)
+  email                                                 String?             @db.VarChar(100)
+  mobile_no                                             String?             @db.VarChar(20)
+  department                                            String?             @db.VarChar(50)
+  manager_name                                          String?             @db.VarChar(100)
+  manager_email                                         String?             @db.VarChar(100)
+  entity                                                String?             @db.VarChar(10)
+  location                                              String?             @db.VarChar(50)
+  site                                                  String?             @db.VarChar(10)
+  role                                                  String?             @db.VarChar(50)
+  description                                           String?
+  erp_id                                                String?             @db.VarChar(100)
+  password                                              String              @default("")
+  must_reset_password                                   Boolean?            @default(true)
+  approval_matrix                                       approval_matrix?
+  audit_logs                                            audit_logs[]
+  line_items_line_items_created_byTousers               line_items[]        @relation("line_items_created_byTousers")
+  line_items_line_items_updated_byTousers               line_items[]        @relation("line_items_updated_byTousers")
+  purchase_requests_purchase_requests_created_byTousers purchase_requests[] @relation("purchase_requests_created_byTousers")
+  purchase_requests_purchase_requests_updated_byTousers purchase_requests[] @relation("purchase_requests_updated_byTousers")
 }
 
 model inventory {
@@ -94,7 +99,7 @@ model inventory {
 }
 
 model vendors {
-  vendoraccountnumber    String  @id
+  vendoraccountnumber    String       @id
   addresscity            String?
   addresscountryregionid String?
   addressstateid         String?
@@ -106,4 +111,74 @@ model vendors {
   vendorgroupid          String?
   vendororganizationname String?
   vendorsearchname       String?
+  line_items             line_items[]
+}
+
+model audit_logs {
+  id                Int                @id @default(autoincrement())
+  pr_number         String?            @db.VarChar(50)
+  approver_emp_code String?            @db.VarChar(30)
+  approval_level    Int?
+  action            String?            @db.VarChar(20)
+  comment           String?
+  acted_at          DateTime?          @default(now()) @db.Timestamp(6)
+  users             users?             @relation(fields: [approver_emp_code], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+  purchase_requests purchase_requests? @relation(fields: [pr_number], references: [pr_number], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model line_items {
+  id                                 Int                @id @default(autoincrement())
+  pr_number                          String?            @db.VarChar(50)
+  productname                        String?            @db.VarChar(100)
+  requiredquantity                   Int?
+  unit_of_measure                    String?            @db.VarChar(50)
+  vendoraccountnumber                String?            @db.VarChar
+  requiredbydate                     DateTime?          @db.Date
+  deliverylocation                   String?            @db.VarChar(100)
+  estimated_cost                     Decimal?           @db.Decimal(12, 2)
+  item_justification                 String?
+  created_by                         String?            @db.VarChar(30)
+  updated_by                         String?            @db.VarChar(30)
+  created_at                         DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at                         DateTime?          @default(now()) @db.Timestamp(6)
+  users_line_items_created_byTousers users?             @relation("line_items_created_byTousers", fields: [created_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+  purchase_requests                  purchase_requests? @relation(fields: [pr_number], references: [pr_number], onDelete: NoAction, onUpdate: NoAction)
+  users_line_items_updated_byTousers users?             @relation("line_items_updated_byTousers", fields: [updated_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+  vendors                            vendors?           @relation(fields: [vendoraccountnumber], references: [vendoraccountnumber], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model purchase_requests {
+  pr_number                                 String        @id @db.VarChar(50)
+  title                                     String?       @db.VarChar(255)
+  request_date                              DateTime?     @db.Date
+  department                                String?       @db.VarChar(100)
+  location                                  String?       @db.VarChar(100)
+  business_justification_code               String?       @db.VarChar(50)
+  business_justification_details            String?
+  status                                    String?       @db.VarChar(50)
+  current_approval_level                    Int?
+  total_estimated_cost                      Decimal?      @db.Decimal(12, 2)
+  requester_emp_code                        String?       @db.VarChar(30)
+  current_approver_emp_code                 String?       @db.VarChar(30)
+  created_by                                String?       @db.VarChar(30)
+  updated_by                                String?       @db.VarChar(30)
+  created_at                                DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at                                DateTime?     @default(now()) @db.Timestamp(6)
+  attachments                               attachments[]
+  audit_logs                                audit_logs[]
+  line_items                                line_items[]
+  users_purchase_requests_created_byTousers users?        @relation("purchase_requests_created_byTousers", fields: [created_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+  users_purchase_requests_updated_byTousers users?        @relation("purchase_requests_updated_byTousers", fields: [updated_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model attachments {
+  id                  Int               @id @default(autoincrement())
+  purchase_request_id String            @db.VarChar(50)
+  file_name           String            @db.VarChar(255)
+  original_name       String            @db.VarChar(255)
+  file_size           Int
+  mime_type           String            @db.VarChar(100)
+  file_path           String            @db.VarChar(500)
+  uploaded_at         DateTime?         @default(now()) @db.Timestamp(6)
+  purchase_requests   purchase_requests @relation(fields: [purchase_request_id], references: [pr_number], onDelete: Cascade, onUpdate: NoAction)
 }

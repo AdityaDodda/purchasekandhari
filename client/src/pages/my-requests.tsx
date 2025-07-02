@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Download, Filter, X, Calendar, MapPin, Package, DollarSign } from "lucide-react";
+import { Plus, Search, Download, Filter, X, Calendar, MapPin, Package, DollarSign, Paperclip } from "lucide-react";
 import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
 
 import { Navbar } from "@/components/layout/navbar";
@@ -42,6 +42,16 @@ export default function MyRequests() {
   const { data: requestDetails, isLoading: isLoadingDetails } = useQuery({
     queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
     enabled: !!selectedRequest,
+  });
+
+  const { data: attachments, isLoading: isLoadingAttachments } = useQuery({
+    queryKey: [selectedRequest?.pr_number, 'attachments'],
+    queryFn: async () => {
+      if (!selectedRequest?.pr_number) return [];
+      const res = await fetch(`/api/purchase-requests/${selectedRequest.pr_number}/attachments`, { credentials: 'include' });
+      return res.json();
+    },
+    enabled: !!selectedRequest?.pr_number && showDetailsModal,
   });
 
   useEffect(() => {
@@ -477,6 +487,37 @@ export default function MyRequests() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                <Separator />
+
+                {/* Attachments */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Paperclip className="h-5 w-5 mr-2 text-blue-600" />
+                    Attachments
+                  </h3>
+                  {isLoadingAttachments ? (
+                    <div className="text-gray-500">Loading attachments...</div>
+                  ) : attachments && attachments.length > 0 ? (
+                    <ul className="space-y-2">
+                      {attachments.map((file: any) => (
+                        <li key={file.id} className="flex items-center space-x-2">
+                          <a
+                            href={`/${file.file_path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {file.original_name}
+                          </a>
+                          <span className="text-xs text-gray-400">({(file.file_size / 1024).toFixed(1)} KB)</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-gray-500">No attachments uploaded for this request.</div>
+                  )}
                 </div>
 
                 <Separator />

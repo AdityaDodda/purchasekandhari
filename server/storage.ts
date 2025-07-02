@@ -68,10 +68,32 @@ export interface IStorage {
   getUniqueEmailDomains(): Promise<string[]>;
   getApproversByDepartmentLocation(department: string, location: string): Promise<User[]>;
 
-  // Purchase Request operations (Not Implemented)
-  createPurchaseRequest(request: InsertPurchaseRequest): Promise<PurchaseRequest>;
-  // ... (other non-implemented methods remain the same)
-  generateRequisitionNumber(department: string): Promise<string>;
+  // Purchase Request operations
+  createPurchaseRequest(data: {
+    entity: string;
+    title: string;
+    requestDate: Date;
+    department: string;
+    location: string;
+    businessJustificationCode: string;
+    businessJustificationDetails: string;
+    totalEstimatedCost: number;
+    requesterEmpCode: string;
+    createdBy: string;
+    updatedBy: string;
+    status?: string;
+    lineItems: Array<{
+      productname: string;
+      requiredquantity: number;
+      unit_of_measure: string;
+      vendoraccountnumber: string;
+      requiredbydate: Date;
+      deliverylocation: string;
+      estimated_cost: number;
+      item_justification?: string;
+    }>;
+  }): Promise<any>;
+  generateRequisitionNumber(entity: string): Promise<string>;
 
   // Master Data operations for Admin system - NO PAGINATION
   getAllUsers(search?: string): Promise<User[]>;
@@ -167,23 +189,108 @@ export class DatabaseStorage implements IStorage {
     return [];
   }
 
-  // Stubs for non-implemented PR/LineItem/etc. features
-  async createPurchaseRequest(request: InsertPurchaseRequest): Promise<PurchaseRequest> {
-    throw new Error("Method not implemented.");
+  async generateRequisitionNumber(entity: string): Promise<string> {
+    // Format: PR-Entity-KGBPL-YYYYMM-COUNTER
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const prefix = `PR-${entity}-KGBPL-${year}${month}`;
+    // Find the max counter for this entity and year+month
+    const lastPR = await this.prisma.purchase_requests.findFirst({
+      where: {
+        pr_number: { startsWith: prefix },
+      },
+      orderBy: { pr_number: 'desc' },
+    });
+    let counter = 1;
+    if (lastPR && lastPR.pr_number) {
+      const match = lastPR.pr_number.match(/(\d+)$/);
+      if (match) {
+        counter = parseInt(match[1], 10) + 1;
+      }
+    }
+    return `${prefix}-${String(counter).padStart(3, '0')}`;
   }
+
+  async createPurchaseRequest(data: {
+    entity: string;
+    title: string;
+    requestDate: Date;
+    department: string;
+    location: string;
+    businessJustificationCode: string;
+    businessJustificationDetails: string;
+    totalEstimatedCost: number;
+    requesterEmpCode: string;
+    createdBy: string;
+    updatedBy: string;
+    status?: string;
+    lineItems: Array<{
+      productname: string;
+      requiredquantity: number;
+      unit_of_measure: string;
+      vendoraccountnumber: string;
+      requiredbydate: Date;
+      deliverylocation: string;
+      estimated_cost: number;
+      item_justification?: string;
+    }>;
+  }): Promise<any> {
+    const pr_number = await this.generateRequisitionNumber(data.entity);
+    return this.prisma.$transaction(async (tx) => {
+      const pr = await tx.purchase_requests.create({
+        data: {
+          pr_number,
+          title: data.title,
+          request_date: data.requestDate,
+          department: data.department,
+          location: data.location,
+          business_justification_code: data.businessJustificationCode,
+          business_justification_details: data.businessJustificationDetails,
+          total_estimated_cost: data.totalEstimatedCost,
+          requester_emp_code: data.requesterEmpCode,
+          status: data.status && ["rejected","returned","pending","approved"].includes(data.status) ? data.status : "pending",
+          created_by: data.createdBy,
+          updated_by: data.updatedBy,
+        },
+      });
+      const lineItems = await Promise.all(
+        data.lineItems.map(item =>
+          tx.line_items.create({
+            data: {
+              pr_number,
+              productname: item.productname,
+              requiredquantity: item.requiredquantity,
+              unit_of_measure: item.unit_of_measure,
+              vendoraccountnumber: item.vendoraccountnumber,
+              requiredbydate: item.requiredbydate,
+              deliverylocation: item.deliverylocation,
+              estimated_cost: item.estimated_cost,
+              item_justification: item.item_justification || null,
+            },
+          })
+        )
+      );
+      return { ...pr, lineItems };
+    });
+  }
+
+  // Stubs for non-implemented PR/LineItem/etc. features
   async getPurchaseRequest(id: string): Promise<PurchaseRequest | null> {
     throw new Error("Method not implemented.");
   }
   async getAllPurchaseRequests(): Promise<PurchaseRequest[]> {
-    throw new Error("Method not implemented.");
+    return this.prisma.purchase_requests.findMany({
+      orderBy: { created_at: 'desc' },
+      include: {
+        line_items: true,
+      },
+    });
   }
   async updatePurchaseRequest(id: string, request: Partial<InsertPurchaseRequest>): Promise<PurchaseRequest> {
     throw new Error("Method not implemented.");
   }
   async deletePurchaseRequest(id: string): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-  async generateRequisitionNumber(department: string): Promise<string> {
     throw new Error("Method not implemented.");
   }
 
@@ -203,8 +310,26 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
 
-  async createAttachment(attachment: InsertAttachment): Promise<Attachment> {
-    throw new Error("Method not implemented.");
+  async createAttachment(attachment: {
+    purchase_request_id: string;
+    file_name: string;
+    original_name: string;
+    file_size: number;
+    mime_type: string;
+    file_path: string;
+    uploaded_at?: Date;
+  }): Promise<any> {
+    return this.prisma.attachments.create({
+      data: {
+        purchase_request_id: attachment.purchase_request_id,
+        file_name: attachment.file_name,
+        original_name: attachment.original_name,
+        file_size: attachment.file_size,
+        mime_type: attachment.mime_type,
+        file_path: attachment.file_path,
+        uploaded_at: attachment.uploaded_at || new Date(),
+      },
+    });
   }
   async getAttachment(id: number): Promise<Attachment | null> {
     throw new Error("Method not implemented.");
@@ -481,6 +606,13 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteSite(id: bigint): Promise<void> {
     await this.prisma.sites.delete({ where: { id } });
+  }
+
+  async getAttachmentsForRequest(prNumber: string): Promise<any[]> {
+    return this.prisma.attachments.findMany({
+      where: { purchase_request_id: prNumber },
+      orderBy: { uploaded_at: 'desc' },
+    });
   }
 }
 

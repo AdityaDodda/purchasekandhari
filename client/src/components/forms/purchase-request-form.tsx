@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { DEPARTMENTS, LOCATIONS, BUSINESS_JUSTIFICATION_CODES } from "@/lib/constants";
+import { DEPARTMENTS, LOCATIONS, BUSINESS_JUSTIFICATION_CODES, REQUEST_STATUSES } from "@/lib/constants";
 import { LineItemsGrid } from "@/components/ui/line-items-grid";
 import { FileUpload } from "@/components/ui/file-upload";
 import type { LineItemFormData, User } from "@/lib/types";
@@ -68,6 +68,7 @@ const requestDetailsSchema = z.object({
   location: z.string().min(1, "Location is required"),
   businessJustificationCode: z.string().min(1, "Business justification code is required"),
   businessJustificationDetails: z.string().min(50, "Business justification must be at least 50 characters"),
+  entity: z.string().min(1, "Entity is required"),
 });
 
 type RequestDetailsFormData = z.infer<typeof requestDetailsSchema>;
@@ -97,6 +98,8 @@ function formatToDDMMYYYY(date: Date | null): string {
   return `${day}-${month}-${year}`;
 }
 
+const ALLOWED_STATUSES = ["pending", "approved", "rejected", "returned"];
+
 export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initialData, isEditMode }: PurchaseRequestFormProps) {
   const [lineItems, setLineItems] = useState<LineItemFormData[]>(initialData?.lineItems || []);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -106,7 +109,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
   const [, navigate] = useLocation();
   const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
 
-  // Set up form with user department/location autofill
+  // Set up form with user department/location/entity autofill
   const {
     register,
     handleSubmit,
@@ -125,12 +128,14 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
           location: initialData.location,
           businessJustificationCode: initialData.businessJustificationCode,
           businessJustificationDetails: initialData.businessJustificationDetails,
+          entity: initialData.entity,
         }
       : user
       ? {
           requestDate: formatToDDMMYYYY(new Date()),
           department: user.department || "",
           location: user.location || "",
+          entity: user.entity || "",
         }
       : {
           requestDate: formatToDDMMYYYY(new Date()),
@@ -181,13 +186,29 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
       return sum + itemTotal;
     }, 0);
 
+    // Convert requestDate to ISO format (yyyy-mm-dd)
+    let isoRequestDate = "";
+    if (formData.requestDate) {
+      const [day, month, year] = formData.requestDate.split("-");
+      if (day && month && year) {
+        isoRequestDate = `${year}-${month}-${day}`;
+      }
+    }
+
+    // Ensure requiredQuantity and estimatedCost are numbers
+    const mappedLineItems = lineItems.map(item => ({
+      ...item,
+      requiredQuantity: Number(item.requiredQuantity),
+      estimatedCost: Number(item.estimatedCost),
+    }));
+
     const requestData = {
       ...formData,
-      requestDate: parseDDMMYYYY(formData.requestDate),
+      requestDate: isoRequestDate,
       totalEstimatedCost: totalCost.toFixed(2),
     };
 
-    onSubmit(requestData, lineItems, attachments);
+    onSubmit(requestData, mappedLineItems, attachments);
   };
 
   const onRequestDetailsSubmit = (data: RequestDetailsFormData) => {
@@ -218,13 +239,18 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                     )}
                   </div>
                   <div>
-                    <Label htmlFor="entity">Entity</Label>
+                    <Label htmlFor="entity">Entity *</Label>
                     <Input
                       id="entity"
-                      value={user?.entity || ""}
+                      {...register("entity")}
+                      value={getValues("entity")}
                       readOnly
                       className="bg-gray-100 cursor-not-allowed"
+                      tabIndex={-1}
                     />
+                    {errors.entity && (
+                      <p className="text-sm text-destructive mt-1">{errors.entity.message}</p>
+                    )}
                   </div>
                 </div>
 
@@ -436,7 +462,6 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                     <span>Quantity</span>
                     <span>Unit</span>
                     <span>Unit Cost</span>
-                    <span>Total Cost</span>
                   </div>
                   {lineItems.map((item, index) => (
                     <div key={index} className="grid grid-cols-5 gap-4 text-gray-900 py-1">
@@ -444,9 +469,6 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                       <span>{item.requiredQuantity}</span>
                       <span>{item.unitOfMeasure}</span>
                       <span>{formatIndianCurrency(item.estimatedCost)}</span>
-                      <span className="font-semibold text-green-600">
-                        {formatIndianCurrency((item.requiredQuantity || 0) * (parseFloat(item.estimatedCost?.toString() || '0')))}
-                      </span>
                     </div>
                   ))}
                 </div>
@@ -458,8 +480,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">Total Estimated Cost</h3>
                   <div className="text-3xl font-bold text-green-700">
                     {formatIndianCurrency(lineItems.reduce((sum, item) => {
-                      const itemTotal = (item.requiredQuantity || 0) * (parseFloat(item.estimatedCost?.toString() || '0'));
-                      return sum + itemTotal;
+                      return sum + (parseFloat(item.estimatedCost?.toString() || '0'));
                     }, 0))}
                   </div>
                   <p className="text-sm text-gray-600 mt-2">

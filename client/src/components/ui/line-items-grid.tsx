@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,8 +22,7 @@ interface LineItem {
   deliveryLocation: string;
   estimatedCost: number;
   itemJustification?: string;
-  stockAvailable?: number;
-  stockLocation?: string;
+  vendor?: any;
 }
 
 interface LineItemsGridProps {
@@ -40,14 +38,12 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<any>(null);
   const [formData, setFormData] = useState<LineItem>({
     itemName: "",
-    requiredQuantity: 1,
+    requiredQuantity: "" as any,
     unitOfMeasure: "",
     requiredByDate: "",
     deliveryLocation: "",
-    estimatedCost: 0,
+    estimatedCost: "" as any,
     itemJustification: "",
-    stockAvailable: 0,
-    stockLocation: "",
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
@@ -66,6 +62,15 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
     enabled: !!searchTerm && editable,
   });
 
+  // Fetch vendor search names for dropdown
+  const { data: vendors = [] } = useQuery({
+    queryKey: ["vendor-searchnames"],
+    queryFn: async () => {
+      const res = await fetch("/api/vendors/searchnames");
+      return res.json();
+    },
+  });
+
   // Helper to filter inventory for dropdown (includes, case-insensitive)
   const filteredInventory = searchTerm
     ? inventory.filter((item: any) =>
@@ -74,69 +79,28 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
       )
     : [];
 
-  const checkStock = (itemName: string) => {
-    return inventory.find((item: any) => 
-      item.name.toLowerCase().includes(itemName.toLowerCase()) ||
-      item.itemCode.toLowerCase().includes(itemName.toLowerCase())
-    );
-  };
-
-  // Helper to get required - stock
-  const getRequiredMinusStock = () => {
-    if (!formData.requiredQuantity || !selectedInventoryItem) return null;
-    return formData.requiredQuantity - selectedInventoryItem.quantity;
-  };
-
   // Add Item handler
   const handleAddItem = () => {
-    const stockInfo = checkStock(formData.itemName);
-    const requiredMinusStock = getRequiredMinusStock();
-    if (requiredMinusStock === null || requiredMinusStock <= 0) {
-      toast({
-        title: "Stock Error",
-        description: "Required - Stock must be positive. Item already in stock or invalid quantity.",
-        variant: "destructive"
-      });
-      return;
-    }
-    const newItem = {
-      ...formData,
-      requiredQuantity: requiredMinusStock, // Use Required - Stock for DB and cost
-      stockAvailable: stockInfo?.quantity || 0,
-      stockLocation: stockInfo?.location || "",
-    };
+    const newItem = { ...formData };
     onItemsChange([...items, newItem]);
     setFormData({
       itemName: "",
-      requiredQuantity: 1,
+      requiredQuantity: "" as any,
       unitOfMeasure: "",
       requiredByDate: "",
       deliveryLocation: "",
-      estimatedCost: 0,
+      estimatedCost: "" as any,
       itemJustification: "",
-      stockAvailable: 0,
-      stockLocation: "",
     });
     setShowAddDialog(false);
   };
 
   // Edit Item handler
   const handleUpdateItem = () => {
-    const stockInfo = checkStock(formData.itemName);
-    const requiredMinusStock = getRequiredMinusStock();
-    if (requiredMinusStock === null || requiredMinusStock <= 0) {
-      toast({
-        title: "Stock Error",
-        description: "Required - Item already in stock or invalid quantity.",
-        variant: "destructive"
-      });
-      return;
-    }
-    const updatedItem = {
+    const updatedItem = { 
       ...formData,
-      requiredQuantity: requiredMinusStock, // Use Required - Stock for DB and cost
-      stockAvailable: stockInfo?.quantity || 0,
-      stockLocation: stockInfo?.location || "",
+      requiredQuantity: parseFloat(formData.requiredQuantity as string) || 0,
+      estimatedCost: parseFloat(formData.estimatedCost as string) || 0
     };
     const updatedItems = items.map(item =>
       item.id === editingItem?.id ? updatedItem : item
@@ -157,39 +121,12 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
     onItemsChange(filteredItems);
   };
 
-  const getStockStatus = (item: LineItem) => {
-    if (!item.stockAvailable) return "out-of-stock";
-    if (item.stockAvailable < item.requiredQuantity) return "low-stock";
-    return "in-stock";
-  };
-
-  const getStockBadge = (item: LineItem) => {
-    const status = getStockStatus(item);
-    const colors = {
-      "in-stock": "bg-green-100 text-green-800",
-      "low-stock": "bg-yellow-100 text-yellow-800",
-      "out-of-stock": "bg-red-100 text-red-800"
-    };
-    const labels = {
-      "in-stock": "In Stock",
-      "low-stock": "Low Stock",
-      "out-of-stock": "Out of Stock"
-    };
-
-    return (
-      <Badge className={colors[status]}>
-        {labels[status]} ({item.stockAvailable || 0})
-      </Badge>
-    );
-  };
-
-  // Calculate total cost (Quantity × Cost per unit for each item)
-  const totalCost = items.reduce((sum, item) => {
-    const itemTotal = (item.requiredQuantity || 0) * (parseFloat(item.estimatedCost?.toString() || '0'));
-    return sum + itemTotal;
+  // Calculate total cost (Cost per unit item adding)
+   const totalCost = items.reduce((sum, item) => {
+    return sum + (parseFloat(item.estimatedCost?.toString() || '0'));
   }, 0);
 
-  // Indian currency formatting function (copied from purchase-request-form.tsx)
+  // Indian currency formatting function
   const formatIndianCurrency = (amount: number | string) => {
     if (!amount && amount !== 0) return "₹0.00";
     const num = parseFloat(amount.toString());
@@ -287,11 +224,9 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                             setFormData({
                               ...formData,
                               itemName: item.productname || item.itemnumber,
-                              requiredQuantity: 1,
-                              estimatedCost: item.unitcost || 0,
+                              requiredQuantity: "" as any,
+                              estimatedCost: item.unitcost || "",
                               unitOfMeasure: item.bomunitsymbol || "",
-                              stockAvailable: item.stockavailable || 0,
-                              stockLocation: item.stocklocation || ""
                             });
                             setSearchTerm("");
                             setHighlightedIndex(-1);
@@ -315,15 +250,12 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                               setFormData({
                                 ...formData,
                                 itemName: item.productname || item.itemnumber,
-                                requiredQuantity: 1,
-                                estimatedCost: item.unitcost || 0,
+                                requiredQuantity: "" as any,
+                                estimatedCost: item.unitcost || "",
                                 unitOfMeasure: item.bomunitsymbol || "",
-                                stockAvailable: item.stockavailable || 0,
-                                stockLocation: item.stocklocation || ""
                               });
                               setSearchTerm("");
                               setHighlightedIndex(-1);
-                              // Refocus input after click
                               setTimeout(() => inputRef.current?.focus(), 0);
                             }}
                           >
@@ -343,24 +275,14 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   <Label htmlFor="requiredQuantity">Required Quantity</Label>
                   <Input
                     id="requiredQuantity"
-                    type="number"
+                    type="text"
                     value={formData.requiredQuantity}
                     onChange={(e) => {
-                      const requestedQty = parseInt(e.target.value) || 1;
-                      setFormData({...formData, requiredQuantity: requestedQty});
+                      const value = e.target.value;
+                      setFormData({...formData, requiredQuantity: value as any});
                     }}
-                    min="1"
+                    placeholder="Enter quantity"
                   />
-                  {selectedInventoryItem && formData.requiredQuantity > selectedInventoryItem.quantity && (
-                    <div className="mt-1 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
-                      <p className="text-yellow-800">
-                        <strong>Stock Alert:</strong> Only {selectedInventoryItem.quantity} available in stock.
-                      </p>
-                      <p className="text-yellow-700 text-xs mt-1">
-                        Requesting {formData.requiredQuantity - selectedInventoryItem.quantity} additional units beyond stock.
-                      </p>
-                    </div>
-                  )}
                 </div>
                 <div>
                   <Label htmlFor="unitOfMeasure">Unit of Measure</Label>
@@ -414,11 +336,42 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   <Label htmlFor="estimatedCost">Estimated Cost (₹)</Label>
                   <Input
                     id="estimatedCost"
-                    type="number"
-                    step="0.01"
+                    type="text"
                     value={formData.estimatedCost}
-                    onChange={(e) => setFormData({...formData, estimatedCost: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData({...formData, estimatedCost: value as any});
+                    }}
+                    placeholder="Enter cost"
                   />
+                </div>
+                {/* Vendor Dropdown */}
+                <div>
+                  <Label htmlFor="vendor">Vendor</Label>
+                  <Select
+                    onValueChange={val => {
+                      const selected = vendors.find((v: any) => v.vendoraccountnumber === val);
+                      setFormData({ ...formData, vendor: selected || null });
+                    }}
+                    value={formData.vendor?.vendoraccountnumber || ""}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Vendor (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vendors.map((vendor: any) => (
+                        <SelectItem key={vendor.vendoraccountnumber} value={vendor.vendoraccountnumber}>
+                          <div>
+                            <span className="font-medium">{vendor.vendorsearchname}</span>
+                            {vendor.vendororganizationname && (
+                              <span className="ml-2 text-xs text-gray-500">({vendor.vendororganizationname})</span>
+                            )}
+                            <span className="ml-2 text-xs text-gray-400">[{vendor.vendoraccountnumber}]</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="md:col-span-2">
                   <Label htmlFor="itemJustification">Item Justification</Label>
@@ -466,15 +419,12 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                 <thead>
                   <tr className="bg-gray-50 border-b">
                     <th className="text-left p-3 font-semibold text-sm border-r">#</th>
-                    {/* MODIFICATION: Removed min-w-[200px] to allow column to be flexible */}
                     <th className="text-left p-3 font-semibold text-sm border-r">Item Name</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Qty</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Unit</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Required By</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Location</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Unit Cost (₹)</th>
-                    <th className="text-left p-3 font-semibold text-sm border-r">Total Cost (₹)</th>
-                    {/* <th className="text-left p-3 font-semibold text-sm border-r">Stock Status</th> */}
                     {editable && <th className="text-center p-3 font-semibold text-sm">Actions</th>}
                   </tr>
                 </thead>
@@ -482,12 +432,16 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   {items.map((item, index) => (
                     <tr key={item.id || index} className="border-b hover:bg-gray-50">
                       <td className="p-3 border-r text-sm font-medium">{index + 1}</td>
-                      {/* MODIFICATION: Added break-words and whitespace-normal to allow text to wrap */}
                       <td className="p-3 border-r">
                         <div className="font-medium text-sm break-words">{item.itemName}</div>
                         {item.itemJustification && (
                           <div className="text-xs text-gray-500 mt-1 whitespace-normal" title={item.itemJustification}>
                             {item.itemJustification}
+                          </div>
+                        )}
+                        {item.vendor && (
+                          <div className="text-xs text-blue-600 mt-1 whitespace-normal" title={item.vendor.vendorsearchname}>
+                            Vendor: {item.vendor.vendorsearchname}
                           </div>
                         )}
                       </td>
@@ -498,20 +452,6 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                       <td className="p-3 border-r text-sm text-gray-600">
                         {formatCurrency(item.estimatedCost)}
                       </td>
-                      <td className="p-3 border-r text-sm font-semibold text-green-600">
-                        {formatCurrency((item.requiredQuantity || 0) * (parseFloat(item.estimatedCost?.toString() || '0')))}
-                      </td>
-                      {/* <td className="p-3 border-r text-sm">
-                        {getStockBadge(item)}
-                        {getStockStatus(item) !== "in-stock" && (
-                          <div className="flex items-center text-xs text-amber-600 mt-1">
-                            <AlertCircle className="h-3 w-3 mr-1" />
-                            {getStockStatus(item) === "low-stock" 
-                              ? `Only ${item.stockAvailable} left` 
-                              : "Out of stock"}
-                          </div>
-                        )}
-                      </td> */}
                       {editable && (
                         <td className="p-3 text-center">
                           <div className="flex justify-center space-x-1">
@@ -544,7 +484,6 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <td className="p-3 border-r font-bold text-lg text-green-700">
                       {formatIndianCurrency(totalCost)}
                     </td>
-                    <td className="p-3 border-r"></td>
                     {editable && <td className="p-3"></td>}
                   </tr>
                 </tbody>

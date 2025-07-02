@@ -84,6 +84,15 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
     },
   });
 
+  // Fetch vendor search names for dropdown
+  const { data: vendors = [] } = useQuery({
+    queryKey: ["vendor-searchnames"],
+    queryFn: async () => {
+      const res = await fetch("/api/vendors/searchnames");
+      return res.json();
+    },
+  });
+
   // Helper to filter inventory for dropdown (includes, case-insensitive)
   const filteredInventory = itemSearch
     ? inventory.filter((item: any) =>
@@ -95,11 +104,11 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
   // Debug log
   console.log("Inventory:", inventory, "Filtered:", filteredInventory, "Search:", itemSearch);
 
-  // Helper to parse dd-mm-yyyy to Date
-  function parseDDMMYYYY(dateStr: string): Date | null {
-    if (!dateStr) return null;
+  // Helper to parse dd-mm-yyyy to Date or undefined
+  function parseDDMMYYYYOrUndefined(dateStr: string): Date | undefined {
+    if (!dateStr) return undefined;
     const [day, month, year] = dateStr.split("-");
-    if (!day || !month || !year) return null;
+    if (!day || !month || !year) return undefined;
     return new Date(Number(year), Number(month) - 1, Number(day));
   }
 
@@ -176,6 +185,35 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
               )}
             </div>
 
+            {/* Vendor Dropdown */}
+            <div>
+              <Label htmlFor="vendor">Vendor</Label>
+              <Select
+                onValueChange={val => {
+                  const selected = vendors.find((v: any) => v.vendoraccountnumber === val);
+                  setValue("vendor", selected || null, { shouldValidate: true });
+                }}
+                value={getValues("vendor")?.vendoraccountnumber || ""}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Vendor (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendors.map((vendor: any) => (
+                    <SelectItem key={vendor.vendoraccountnumber} value={vendor.vendoraccountnumber}>
+                      <div>
+                        <span className="font-medium">{vendor.vendorsearchname}</span>
+                        {vendor.vendororganizationname && (
+                          <span className="ml-2 text-xs text-gray-500">({vendor.vendororganizationname})</span>
+                        )}
+                        <span className="ml-2 text-xs text-gray-400">[{vendor.vendoraccountnumber}]</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
               <Label htmlFor="requiredQuantity">Required Quantity *</Label>
               <Input
@@ -221,9 +259,9 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                 <PopoverContent align="start" className="p-0 w-auto">
                   <Calendar
                     mode="single"
-                    selected={parseDDMMYYYY(getValues("requiredByDate"))}
+                    selected={parseDDMMYYYYOrUndefined(getValues("requiredByDate"))}
                     onSelect={(date) => {
-                      setValue("requiredByDate", formatToDDMMYYYY(date));
+                      setValue("requiredByDate", formatToDDMMYYYY(date ?? null));
                       setCalendarOpen(false);
                     }}
                     fromDate={new Date()}

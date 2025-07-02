@@ -18,7 +18,10 @@ export function FileUpload({
   onFilesChange,
   maxFiles = 10,
   maxFileSize = 10 * 1024 * 1024, // 10MB
-  acceptedFileTypes = [],
+  acceptedFileTypes = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ],
 }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -150,7 +153,7 @@ export function FileUpload({
             Select Files
           </Button>
           <p className="text-xs text-gray-400 mt-4">
-            Supported formats: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG (Max: {Math.round(maxFileSize / (1024 * 1024))}MB each)
+            Supported formats: PDF, XLSX (Max: {Math.round(maxFileSize / (1024 * 1024))}MB each)
           </p>
         </CardContent>
       </Card>

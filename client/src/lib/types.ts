@@ -6,6 +6,7 @@ export interface LineItemFormData {
   deliveryLocation: string;
   estimatedCost: number;
   itemJustification?: string;
+  vendor?: any;
 }
 
 export interface PurchaseRequestFormData {
@@ -15,6 +16,7 @@ export interface PurchaseRequestFormData {
   location: string;
   businessJustificationCode: string;
   businessJustificationDetails: string;
+  entity: string;
   lineItems: LineItemFormData[];
   attachments: File[];
 }
@@ -101,6 +103,7 @@ export interface LineItem {
   stockAvailable?: number;
   stockLocation?: string;
   createdAt?: string;
+  vendor?: any;
 }
 
 export interface Attachment {

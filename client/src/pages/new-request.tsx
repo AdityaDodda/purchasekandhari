@@ -21,15 +21,17 @@ export default function NewRequest() {
 
   const createRequestMutation = useMutation({
     mutationFn: async ({ requestData, lineItems, attachments }: any) => {
-      const response = await apiRequest("POST", "/api/purchase-requests", requestData);
+      // Send all data in one request, backend will generate PR number
+      const response = await apiRequest("POST", "/api/purchase-requests", {
+        ...requestData,
+        lineItems,
+      });
       const request = await response.json();
-      for (const item of lineItems) {
-        await apiRequest("POST", `/api/purchase-requests/${request.id}/line-items`, item);
-      }
-      if (attachments.length > 0) {
+      // Upload attachments if any
+      if (attachments && attachments.length > 0 && request.pr_number) {
         const formData = new FormData();
         attachments.forEach((file: File) => formData.append('files', file));
-        await fetch(`/api/purchase-requests/${request.id}/attachments`, {
+        await fetch(`/api/purchase-requests/${request.pr_number}/attachments`, {
           method: 'POST',
           body: formData,
           credentials: 'include',

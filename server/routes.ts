@@ -295,7 +295,49 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/purchase-requests", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Purchase requests are not enabled with the current database schema.", requiredModels: ["PurchaseRequest", "LineItem", "ApprovalWorkflow", "Notification"] });
+      const {
+        entity,
+        title,
+        requestDate,
+        department,
+        location,
+        businessJustificationCode,
+        businessJustificationDetails,
+        totalEstimatedCost,
+        lineItems,
+      } = req.body;
+      // requesterEmpCode from session
+      const requesterEmpCode = req.session.user?.employeeNumber || req.session.user?.emp_code;
+      if (!entity || !title || !requestDate || !department || !location || !businessJustificationCode || !businessJustificationDetails || !totalEstimatedCost || !lineItems) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      // Map frontend line items to backend fields
+      const mappedLineItems = lineItems.map((item: any) => ({
+        productname: item.itemName,
+        requiredquantity: Number(item.requiredQuantity),
+        unit_of_measure: item.unitOfMeasure,
+        vendoraccountnumber: item.vendor?.vendoraccountnumber || null,
+        requiredbydate: item.requiredByDate ? new Date(item.requiredByDate.split('-').reverse().join('-')) : new Date(),
+        deliverylocation: item.deliveryLocation,
+        estimated_cost: Number(item.estimatedCost),
+        item_justification: item.itemJustification || null,
+      }));
+      const pr = await storage.createPurchaseRequest({
+        entity,
+        title,
+        requestDate: new Date(requestDate),
+        department,
+        location,
+        businessJustificationCode,
+        businessJustificationDetails,
+        totalEstimatedCost: parseFloat(totalEstimatedCost),
+        requesterEmpCode,
+        createdBy: req.session.user?.emp_code || requesterEmpCode,
+        updatedBy: req.session.user?.emp_code || requesterEmpCode,
+        status: req.body.status || 'pending',
+        lineItems: mappedLineItems,
+      });
+      res.status(201).json(pr);
     } catch (error: any) {
       console.error("Create purchase request error:", error);
       res.status(500).json({ message: "Internal server error", details: error.message });
@@ -313,7 +355,8 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/purchase-requests", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Purchase requests are not enabled with the current database schema." });
+      const requests = await storage.getAllPurchaseRequests();
+      res.json(requests);
     } catch (error) {
       console.error("Get purchase requests error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -376,7 +419,31 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/purchase-requests/:id/attachments", requireAuth, upload.array('files', 10), async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Attachments are not enabled with the current database schema." });
+      const prNumber = req.params.id;
+      if (!req.files || !Array.isArray(req.files)) {
+        return res.status(400).json({ message: "No files uploaded" });
+      }
+      // Only allow PDF and XLSX
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ];
+      const uploadedFiles = req.files.filter((file: any) => allowedTypes.includes(file.mimetype));
+      if (uploadedFiles.length === 0) {
+        return res.status(400).json({ message: "No valid PDF or XLSX files uploaded" });
+      }
+      // Save file metadata to DB
+      const attachments = await Promise.all(uploadedFiles.map((file: any) =>
+        storage.createAttachment({
+          purchase_request_id: prNumber,
+          file_name: file.filename,
+          original_name: file.originalname,
+          file_size: file.size,
+          mime_type: file.mimetype,
+          file_path: file.path,
+        })
+      ));
+      res.status(201).json({ attachments });
     } catch (error) {
       console.error("Upload attachments error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -385,7 +452,9 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/purchase-requests/:id/attachments", requireAuth, async (req, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Attachments are not enabled with the current database schema." });
+      const prNumber = req.params.id;
+      const attachments = await storage.getAttachmentsForRequest(prNumber);
+      res.json(attachments);
     } catch (error) {
       console.error("Get attachments error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -421,7 +490,16 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/dashboard/stats", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Dashboard statistics are not available with the current database schema." });
+      const requests = await storage.getAllPurchaseRequests();
+      const stats = {
+        totalRequests: requests.length,
+        pendingRequests: requests.filter(r => r.status === 'pending').length,
+        approvedRequests: requests.filter(r => r.status === 'approved').length,
+        rejectedRequests: requests.filter(r => r.status === 'rejected').length,
+        returnedRequests: requests.filter(r => r.status === 'returned').length,
+        totalValue: requests.reduce((sum, r) => sum + (parseFloat(r.total_estimated_cost || '0')), 0),
+      };
+      res.json(stats);
     } catch (error) {
       console.error("Get dashboard stats error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -448,7 +526,8 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/reports/purchase-requests', requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Purchase request reports are not enabled with the current database schema." });
+      const requests = await storage.getAllPurchaseRequests();
+      res.json(requests);
     } catch (error) {
       console.error('Error fetching reports data:', error);
       res.status(500).json({ message: 'Failed to fetch reports data' });
@@ -621,6 +700,26 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Get approval history error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Vendor searchnames for dropdown
+  app.get('/api/vendors/searchnames', requireAuth, async (req, res) => {
+    try {
+      const vendors = await storage.getAllVendors();
+      // Only return non-empty vendorsearchname, sorted alphabetically
+      const filtered = vendors
+        .filter(v => v.vendorsearchname && v.vendorsearchname.trim() !== "")
+        .sort((a, b) => (a.vendorsearchname || '').localeCompare(b.vendorsearchname || ''))
+        .map(v => ({
+          vendorsearchname: v.vendorsearchname,
+          vendoraccountnumber: v.vendoraccountnumber,
+          vendororganizationname: v.vendororganizationname
+        }));
+      res.json(filtered);
+    } catch (error) {
+      console.error('Error fetching vendor searchnames:', error);
+      res.status(500).json({ message: 'Failed to fetch vendor searchnames' });
     }
   });
 
