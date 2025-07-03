@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import { ApprovalHistory } from "@/lib/types";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 interface CommentsProps {
   purchaseRequestId: number;
@@ -21,35 +22,39 @@ export function Comments({ purchaseRequestId, canComment = true }: CommentsProps
   });
 
   const comments = Array.isArray(history)
-    ? (history as ApprovalHistory[]).filter(
+    ? (history as any[]).filter(
         (h) => h.comment && h.comment.trim() !== ""
       )
     : [];
 
   return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>Comments</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div>Loading...</div>
-        ) : comments.length === 0 ? (
-          <div className="text-gray-500">No comments yet.</div>
-        ) : (
-          comments.map((c: any) => (
-            <div key={c.id} className="mb-4">
-              <div className="font-medium">
-                {c.users?.name || "Approver"}
-              </div>
-              <div className="text-xs text-gray-500 mb-1">
-                {c.action} on {c.acted_at ? formatDate(c.acted_at) : ""}
-              </div>
-              <div className="bg-gray-50 border rounded p-2">{c.comment}</div>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
+    <Accordion type="single" collapsible>
+      <AccordionItem value="comments">
+        <AccordionTrigger>Comments History</AccordionTrigger>
+        <AccordionContent>
+          <Card className="mt-2">
+            <CardContent>
+              {isLoading ? (
+                <div>Loading...</div>
+              ) : comments.length === 0 ? (
+                <div className="text-gray-500">No comments yet.</div>
+              ) : (
+                (comments as any[]).map((c) => (
+                  <div key={c.id} className="mb-4">
+                    <div className="font-medium">
+                      {c.users?.name || "Approver"}
+                    </div>
+                    <div className="text-xs text-gray-500 mb-1">
+                      {c.action} on {c.acted_at ? formatDate(c.acted_at) : ""}
+                    </div>
+                    <div className="bg-gray-50 border rounded p-2">{c.comment}</div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 } 

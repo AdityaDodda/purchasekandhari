@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {Form, FormControl, FormField, FormItem, FormLabel, FormMessage} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
-import { Building2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -78,7 +77,7 @@ export default function ResetPasswordPage() {
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
         <div className="flex flex-col items-center space-y-2 text-center">
-          <Building2 className="w-10 h-10 text-blue-600" />
+            <img src="/assets/cola.png" alt="cola" />
           <h1 className="text-3xl font-bold">Reset Password</h1>
           <p className="text-gray-500 dark:text-gray-400">
             As you are first time logging in you have to reset password.

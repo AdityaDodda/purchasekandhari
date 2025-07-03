@@ -271,7 +271,7 @@ export default function AdminReports() {
                 </span>
               </div>
               <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>Submitted: {filteredRequests.filter((r: any) => r.status === 'submitted').length}</span>
+              {/* <span>Submitted: {filteredRequests.filter((r: any) => r.status === 'submitted').length}</span> */}
                 <span>Pending: {filteredRequests.filter((r: any) => r.status === 'pending').length}</span>
                 <span>Approved: {filteredRequests.filter((r: any) => r.status === 'approved').length}</span>
                 <span>Rejected: {filteredRequests.filter((r: any) => r.status === 'rejected').length}</span>
@@ -450,7 +450,7 @@ export default function AdminReports() {
                     <CardContent className="space-y-3">
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="text-gray-500">Submitted:</span>
+                        {/* <span className="text-gray-500">Submitted:</span> */}
                         <span className="ml-2 font-medium">
                           {selectedRequest && formatDate(selectedRequest.requestDate)}
                         </span>

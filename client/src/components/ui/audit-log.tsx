@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { ApprovalHistory } from "@/lib/types";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 interface AuditLogProps {
   purchaseRequestId: number;
@@ -33,31 +34,35 @@ export function AuditLog({ purchaseRequestId }: AuditLogProps) {
     : [];
 
   return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>Audit Log</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div>Loading...</div>
-        ) : auditLog.length === 0 ? (
-          <div className="text-gray-500">No audit log yet.</div>
-        ) : (
-          auditLog.map((h: any) => (
-            <div key={h.id} className="mb-3">
-              <div>
-                <span className="font-medium">{h.users?.name || "Approver"}</span>{" "}
-                <span className="text-xs text-gray-500">
-                  ({actionLabels[h.action?.toLowerCase() || ""] || h.action} at level {h.approvalLevel} on {h.acted_at ? formatDateTime(h.acted_at) : ""})
-                </span>
-                {h.comments && (
-                  <div className="text-xs text-gray-700 mt-1">Comment: {h.comments}</div>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
+    <Accordion type="single" collapsible>
+      <AccordionItem value="audit">
+        <AccordionTrigger>Audit History</AccordionTrigger>
+        <AccordionContent>
+          <Card className="mt-2">
+            <CardContent>
+              {isLoading ? (
+                <div>Loading...</div>
+              ) : auditLog.length === 0 ? (
+                <div className="text-gray-500">No audit log yet.</div>
+              ) : (
+                auditLog.map((h: any) => (
+                  <div key={h.id} className="mb-3">
+                    <div>
+                      <span className="font-medium">{h.users?.name || "Approver"}</span>{" "}
+                      <span className="text-xs text-gray-500">
+                        ({actionLabels[h.action?.toLowerCase() || ""] || h.action} at level {h.approval_level} on {h.acted_at ? formatDateTime(h.acted_at) : ""})
+                      </span>
+                      {h.comments && (
+                        <div className="text-xs text-gray-700 mt-1">Comment: {h.comments}</div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 } 
