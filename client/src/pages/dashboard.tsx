@@ -462,7 +462,11 @@ export default function Dashboard() {
                           <Button
                             className="bg-green-600 hover:bg-green-700 text-white"
                             onClick={async () => {
-                              const comment = prompt("Enter approval comments (optional):");
+                              const comment = prompt("Enter approval comments (required):");
+                              if (comment === null || comment.trim() === "") {
+                                alert("Approval comment is required.");
+                                return;
+                              }
                               try {
                                 await fetch(`/api/purchase-requests/${selectedRequest.id}/approve`, {
                                   method: 'POST',
@@ -546,23 +550,32 @@ function ApprovalProgress({ request }: { request: PurchaseRequest }) {
     queryKey: ["/api/approval-workflow", request.department, request.location],
     enabled: !!request,
   });
-  const maxLevel = Array.isArray(workflow) ? workflow.length : 2;
-  const isFullyApproved = request.status === 'approved' && request.currentApprovalLevel === maxLevel;
-  const percent = isFullyApproved ? 100 : ((request.currentApprovalLevel / maxLevel) * 100);
+  // Calculate display level for progress bar
+  let displayLevel = 0;
+  if (request.status === 'approved') {
+    displayLevel = 3;
+  } else if (request.currentApprovalLevel === 3) {
+    displayLevel = 2;
+  } else if (request.currentApprovalLevel === 2) {
+    displayLevel = 1;
+  } else if (request.currentApprovalLevel === 1) {
+    displayLevel = 0;
+  }
+  // If the request is rejected, keep percent at the last stage reached (optional: could set to 0 or a special value)
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
         <span className="text-sm font-medium text-gray-700">
-          Level {request.currentApprovalLevel} of {maxLevel}
+          Level {displayLevel} of 3
         </span>
         <span className="text-sm text-gray-500">
-          {percent.toFixed(0)}% Complete
+          {((displayLevel / 3) * 100).toFixed(2)}% Complete
         </span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-3">
         <div
           className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-          style={{ width: `${percent}%` }}
+          style={{ width: `${((displayLevel / 3) * 100).toFixed(2)}%` }}
         />
       </div>
       {Array.isArray(workflow) && (
@@ -582,7 +595,7 @@ function ApprovalProgress({ request }: { request: PurchaseRequest }) {
         </div>
       )}
       <p className="text-xs text-gray-500 mt-2">
-        {isFullyApproved
+        {displayLevel === 3
           ? "Request approved - Procurement in progress"
           : request.status === "rejected"
           ? "Request has been rejected"

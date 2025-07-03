@@ -271,7 +271,6 @@ export default function AdminDashboard() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="submitted">Submitted</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="approved">Approved</SelectItem>
                     <SelectItem value="rejected">Rejected</SelectItem>
@@ -522,7 +521,9 @@ export default function AdminDashboard() {
               <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
               {/* <ApprovalProgress request={selectedRequest} />  // Assuming this component exists */}
               {/* Show Comments & Audit Log below approval progress only when viewing details */}
-              <CommentsAuditLog purchaseRequestId={selectedRequest.id} />
+              {selectedRequest?.id && (
+                <CommentsAuditLog purchaseRequestId={selectedRequest.id} />
+              )}
             </div>
             <Separator />
             <div>

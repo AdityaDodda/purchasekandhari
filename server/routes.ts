@@ -588,7 +588,7 @@ export function registerRoutes(app: Express): Server {
             pr_number: prNumber,
             approver_emp_code: String(user.emp_code),
             approval_level: 99,
-            action: "approved (admin override)",
+            action: "admin_approved",
             comment,
           });
         } catch (err) {
