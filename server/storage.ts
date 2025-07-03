@@ -202,7 +202,7 @@ export class DatabaseStorage implements IStorage {
         counter = parseInt(match[1], 10) + 1;
       }
     }
-    return `${prefix}-${String(counter).padStart(3, '0')}`;
+    return `${prefix}-${String(counter).padStart(4, '0')}`;
   }
 
   async createPurchaseRequest(data: {
@@ -476,8 +476,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Location Master
-  async getAllLocations(search?: string): Promise<Location[]> {
-    throw new Error("ERR: getAllLocations not implemented. Consider using Sites.");
+  async getAllLocations(): Promise<string[]> {
+    const locations = await this.prisma.users.findMany({
+      where: { location: { not: null } },
+      select: { location: true },
+      distinct: ['location'],
+      orderBy: { location: 'asc' },
+    });
+    return locations.map(l => l.location).filter((l): l is string => !!l);
   }
   async createLocation(location: InsertLocation): Promise<Location> {
     throw new Error("Method not implemented.");

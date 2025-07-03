@@ -45,12 +45,12 @@ export const UNITS_OF_MEASURE = [
 ];
 
 export const REQUEST_STATUSES = [
-  { value: "submitted", label: "Submitted", color: "blue" },
+  // { value: "submitted", label: "Submitted", color: "blue" },
   { value: "pending", label: "Pending", color: "yellow" },
   { value: "approved", label: "Approved", color: "green" },
-  { value: "rejected", label: "Rejected", color: "red" },
   { value: "returned", label: "Returned", color: "orange" },
-  { value: "cancelled", label: "Cancelled", color: "gray" },
+  { value: "rejected", label: "Rejected", color: "red" },
+  // { value: "cancelled", label: "Cancelled", color: "gray" },
 ];
 
 export const USER_ROLES = [

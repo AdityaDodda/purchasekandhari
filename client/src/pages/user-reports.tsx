@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Download, Filter, Calendar, Users, MapPin, Building, FileText, Eye } from "lucide-react";
-import * as XLSX from 'xlsx'; // Import the xlsx library
+import { Search, Download, Filter, Calendar, FileText, Eye, Users, Building, MapPin } from "lucide-react";
+import * as XLSX from 'xlsx';
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Navbar } from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,21 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {Pagination,PaginationContent,PaginationItem,PaginationLink,PaginationPrevious,PaginationNext} from "@/components/ui/pagination";
-import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
-import { ApprovalProgress } from "./my-requests";
-import { DEPARTMENTS, LOCATIONS, REQUEST_STATUSES } from "@/lib/constants";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
+import { REQUEST_STATUSES } from "@/lib/constants";
 import { Calendar as UiCalendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { ApprovalProgress } from "./my-requests";
+import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
-export default function Reports() {
+export default function UserReports() {
   const [filters, setFilters] = useState({
     status: "all",
-    department: "all",
-    location: "all",
-    requester: "all",
     search: "",
     startDate: "",
     endDate: "",
@@ -39,128 +36,72 @@ export default function Reports() {
   const { data: requests, isLoading } = useQuery({
     queryKey: ["/api/reports/purchase-requests", filters],
   });
-
-  const { data: requestDetails, isLoading: isLoadingDetails } = useQuery({
+  const { data: requestDetails, isLoading: isLoadingDetails } = useQuery<any>({
     queryKey: ["/api/purchase-requests", selectedRequest?.id, "details"],
     enabled: !!selectedRequest?.id,
   });
 
-  const { data: users } = useQuery({
-    queryKey: ["/api/admin/users"],
-  });
-
   const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
-
   const handleViewDetails = (request: any) => {
     setSelectedRequest(request);
     setShowDetailsModal(true);
   };
-
-  // NEW: Function to export data to XLSX
   function exportToXLSX(data: any[], filename: string) {
-    if (!data || data.length === 0) {
-      console.warn("No data to export.");
-      return;
-    }
-
+    if (!data || data.length === 0) return;
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase Requests');
     XLSX.writeFile(workbook, filename);
   }
-
-  // handleExport to use exportToXLSX
   const handleExporttoXlsx = () => {
-    if (!filteredRequests.length) {
-      alert("No data available to export.");
-      return;
-    }
-
+    if (!filteredRequests.length) return;
     const simplifiedData = filteredRequests.map(req => ({
       RequisitionNumber: req.requisitionNumber,
       Title: req.title,
-      Requester: req.requester?.fullName,
-      Department: req.department,
-      Location: req.location,
       Amount: req.totalEstimatedCost,
       Status: req.status,
       RequestDate: formatDate(req.requestDate),
     }));
-
     exportToXLSX(simplifiedData, "purchase-request-report.xlsx");
   };
-
   const filteredRequests = Array.isArray(requests)
     ? requests.filter((req: any) => {
         if (filters.status !== "all" && req.status !== filters.status) return false;
-        if (filters.department !== "all" && req.department !== filters.department) return false;
-        if (filters.location !== "all" && req.location !== filters.location) return false;
-        if (filters.requester !== "all" && req.requester?.id?.toString() !== filters.requester) return false;
         if (filters.search) {
           const search = filters.search.toLowerCase();
           const matches =
             req.title?.toLowerCase().includes(search) ||
-            req.requisitionNumber?.toLowerCase().includes(search) ||
-            req.requester?.fullName?.toLowerCase().includes(search);
+            req.requisitionNumber?.toLowerCase().includes(search);
           if (!matches) return false;
         }
         // Date range filter
         if (filters.startDate) {
           const reqDate = new Date(req.requestDate);
-          const start = parseDDMMYYYY(filters.startDate);
+          const [day, month, year] = filters.startDate.split("-");
+          const start = new Date(Number(year), Number(month) - 1, Number(day));
           if (start && reqDate < start) return false;
         }
         if (filters.endDate) {
           const reqDate = new Date(req.requestDate);
-          const end = parseDDMMYYYY(filters.endDate);
-          if (end) {
-            // Add 1 day to endDate to make it inclusive
-            end.setDate(end.getDate() + 1);
-            if (reqDate >= end) return false;
-          }
+          const [day, month, year] = filters.endDate.split("-");
+          const end = new Date(Number(year), Number(month) - 1, Number(day));
+          end.setDate(end.getDate() + 1);
+          if (reqDate >= end) return false;
         }
         return true;
       })
     : [];
 
-  useEffect(() => {
-    setPage(1);
-  }, [filteredRequests]);
-
-  // Helper to parse dd-mm-yyyy to Date
-  function parseDDMMYYYY(dateStr: string): Date | null {
-    if (!dateStr) return null;
-    const [day, month, year] = dateStr.split("-");
-    if (!day || !month || !year) return null;
-    return new Date(Number(year), Number(month) - 1, Number(day));
-  }
-
-  // Helper to format Date to dd-mm-yyyy
-  function formatToDDMMYYYY(date: Date | null): string {
-    if (!date) return "";
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}-${month}-${year}`;
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Purchase Request Reports</h1>
-          <p className="text-gray-600">Generate comprehensive reports with advanced filtering options</p>
+          <p className="text-gray-600">Generate reports with basic filtering options</p>
         </div>
-
-        {/* Filters Card */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -175,22 +116,16 @@ export default function Reports() {
                 <label className="text-sm font-medium text-gray-700">Start Date</label>
                 <Popover open={calendarOpenStart} onOpenChange={setCalendarOpenStart}>
                   <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="w-full border rounded px-3 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      onClick={() => setCalendarOpenStart(true)}
-                    >
-                      {filters.startDate
-                        ? formatDate(filters.startDate)
-                        : <span className="text-gray-400">Select date</span>}
+                    <button type="button" className="w-full border rounded px-3 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" onClick={() => setCalendarOpenStart(true)}>
+                      {filters.startDate ? formatDate(filters.startDate) : <span className="text-gray-400">Select date</span>}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="p-0 w-auto">
                     <UiCalendar
                       mode="single"
-                      selected={parseDDMMYYYY(filters.startDate)}
+                      selected={filters.startDate ? new Date(filters.startDate.split('-').reverse().join('-')) : undefined}
                       onSelect={(date) => {
-                        handleFilterChange("startDate", formatToDDMMYYYY(date));
+                        if (date) handleFilterChange("startDate", `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`);
                         setCalendarOpenStart(false);
                       }}
                       fromDate={new Date(2000, 0, 1)}
@@ -203,22 +138,16 @@ export default function Reports() {
                 <label className="text-sm font-medium text-gray-700">End Date</label>
                 <Popover open={calendarOpenEnd} onOpenChange={setCalendarOpenEnd}>
                   <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="w-full border rounded px-3 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      onClick={() => setCalendarOpenEnd(true)}
-                    >
-                      {filters.endDate
-                        ? formatDate(filters.endDate)
-                        : <span className="text-gray-400">Select date</span>}
+                    <button type="button" className="w-full border rounded px-3 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" onClick={() => setCalendarOpenEnd(true)}>
+                      {filters.endDate ? formatDate(filters.endDate) : <span className="text-gray-400">Select date</span>}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="p-0 w-auto">
                     <UiCalendar
                       mode="single"
-                      selected={parseDDMMYYYY(filters.endDate)}
+                      selected={filters.endDate ? new Date(filters.endDate.split('-').reverse().join('-')) : undefined}
                       onSelect={(date) => {
-                        handleFilterChange("endDate", formatToDDMMYYYY(date));
+                        if (date) handleFilterChange("endDate", `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`);
                         setCalendarOpenEnd(false);
                       }}
                       fromDate={new Date(2000, 0, 1)}
@@ -227,7 +156,6 @@ export default function Reports() {
                 </Popover>
                 <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy</p>
               </div>
-
               {/* Status Filter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Status</label>
@@ -238,89 +166,23 @@ export default function Reports() {
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
                     {REQUEST_STATUSES.map((status) => (
-                      <SelectItem key={status.value} value={status.value}>
-                        {status.label}
-                      </SelectItem>
+                      <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Department Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Department</label>
-                <Select value={filters.department} onValueChange={(value) => handleFilterChange("department", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {DEPARTMENTS.map((dept) => (
-                      <SelectItem key={dept.value} value={dept.value}>
-                        {dept.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Location Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Location</label>
-                <Select value={filters.location} onValueChange={(value) => handleFilterChange("location", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Locations</SelectItem>
-                    {LOCATIONS.map((location) => (
-                      <SelectItem key={location.value} value={location.value}>
-                        {location.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* User Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Requester</label>
-                <Select value={filters.requester} onValueChange={(value) => handleFilterChange("requester", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Users</SelectItem>
-                    {Array.isArray(users) && users.map((user: any) => (
-                      <SelectItem key={user.id} value={user.id.toString()}>
-                        {user.fullName} ({user.employeeNumber})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Search */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Search</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search requests..."
-                    value={filters.search}
-                    onChange={(e) => handleFilterChange("search", e.target.value)}
-                    className="pl-10"
-                  />
+                  <Input placeholder="Search requests..." value={filters.search} onChange={(e) => handleFilterChange("search", e.target.value)} className="pl-10" />
                 </div>
               </div>
-
               {/* Export Button */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700"> </label>
-                <Button 
-                  onClick={handleExporttoXlsx}
-                  className="w-full bg-green-600 hover:bg-green-700"
-                >
+                <label className="text-sm font-medium text-gray-700">&nbsp;</label>
+                <Button onClick={handleExporttoXlsx} className="w-full bg-green-600 hover:bg-green-700">
                   <Download className="h-4 w-4 mr-2" />
                   Export Report
                 </Button>
@@ -328,9 +190,10 @@ export default function Reports() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Results Summary */}
-        <Card className="mb-6">
+        {/* Results Table, Pagination, and Details Modal can be copied from the original reports page */}
+        {/* ... (omitted for brevity) ... */}
+         {/* Results Summary */}
+         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -622,4 +485,4 @@ export default function Reports() {
       </div>
     </div>
   );
-}
+} 

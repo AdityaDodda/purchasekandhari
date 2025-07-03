@@ -761,6 +761,26 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.get('/api/admin/masters/locations', requireAuth, requireRole(['admin']), async (req: any, res) => {
+    try {
+      const locations = await storage.getAllLocations();
+      res.json(locations);
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+      res.status(500).json({ message: 'Failed to fetch locations' });
+    }
+  });
+
+  app.get('/api/admin/reports/locations', async (req, res) => {
+    try {
+      const locations = await storage.getAllLocations();
+      res.json(locations);
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+      res.status(500).json({ message: 'Failed to fetch locations' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
