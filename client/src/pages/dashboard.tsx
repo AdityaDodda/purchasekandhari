@@ -63,9 +63,9 @@ export default function Dashboard() {
 
   let queryParams: Record<string, any> = {};
   if (activeView === 'approver' && user) {
-    queryParams = { currentApproverId: user.emp_code, status: 'pending' };
+    queryParams = { approverEmpCode: user.emp_code, status: 'pending' };
   } else if (activeView === 'pending') {
-    queryParams = { currentApproverId: user?.emp_code, status: 'pending' };
+    queryParams = { approverEmpCode: user?.emp_code, status: 'pending' };
   } else if (activeView === 'my') {
     queryParams = { createdBy: user?.emp_code };
   }
@@ -401,41 +401,85 @@ export default function Dashboard() {
                     <ApprovalProgress request={selectedRequest} />
                     <ApprovalAuditLog requestId={selectedRequest.id} />
                     {/* Approve button for current approver only */}
-                    {user && selectedRequest.status === 'pending' && selectedRequest.currentApproverId === user.id && (
-                      <div className="flex gap-2 mt-4">
-                        <Button
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={async () => {
-                            const comments = prompt("Enter approval comments (optional):");
-                            try {
-                              await fetch(`/api/purchase-requests/${selectedRequest.id}/approve`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ comments }),
-                                credentials: 'include',
-                              });
-                              alert('Request approved!');
-                              setShowDetailsModal(false);
-                            } catch (e) {
-                              alert('Failed to approve request.');
-                            }
-                          }}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          className="bg-blue-500 text-white"
-                          onClick={() => alert('Dummy Return action')}
-                        >
-                          Return
-                        </Button>
-                        <Button
-                          className="bg-orange-600 text-white"
-                          onClick={() => alert('Dummy Reject action')}
-                        >
-                          Reject
-                        </Button>
-                      </div>
+                    {user && selectedRequest.status === 'pending' && (
+                      (selectedRequest.currentApproverId === user.emp_code ||
+                        (selectedRequest.currentApprovalLevel === 3 && !selectedRequest.currentApproverId &&
+                          selectedRequest.approvalMatrix &&
+                          (selectedRequest.approvalMatrix.approver_3a_emp_code === user.emp_code ||
+                            selectedRequest.approvalMatrix.approver_3b_emp_code === user.emp_code)
+                        )
+                      ) && (
+                        <div className="flex gap-2 mt-4">
+                          <Button
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={async () => {
+                              const comments = prompt("Enter approval comments (optional):");
+                              try {
+                                await fetch(`/api/purchase-requests/${selectedRequest.id}/approve`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ comments }),
+                                  credentials: 'include',
+                                });
+                                alert('Request approved!');
+                                setShowDetailsModal(false);
+                              } catch (e) {
+                                alert('Failed to approve request.');
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            className="bg-blue-500 text-white"
+                            onClick={async () => {
+                              const comment = prompt("Enter return comment (required):");
+                              if (comment === null || comment.trim() === "") {
+                                alert("Return comment is required.");
+                                return;
+                              }
+                              try {
+                                await fetch(`/api/purchase-requests/${selectedRequest.id}/return`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ comment }),
+                                  credentials: 'include',
+                                });
+                                alert('Request returned!');
+                                setShowDetailsModal(false);
+                              } catch (e) {
+                                alert('Failed to return request.');
+                              }
+                            }}
+                          >
+                            Return
+                          </Button>
+                          <Button
+                            className="bg-orange-600 text-white"
+                            onClick={async () => {
+                              const comment = prompt("Enter rejection reason (required):");
+                              if (comment === null || comment.trim() === "") {
+                                alert("Rejection reason is required.");
+                                return;
+                              }
+                              try {
+                                await fetch(`/api/purchase-requests/${selectedRequest.id}/reject`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ comment }),
+                                  credentials: 'include',
+                                });
+                                alert('Request rejected!');
+                                setShowDetailsModal(false);
+                              } catch (e) {
+                                alert('Failed to reject request.');
+                              }
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )
                     )}
                   </div>
                 )}
@@ -454,6 +498,8 @@ function ApprovalProgress({ request }: { request: PurchaseRequest }) {
     enabled: !!request,
   });
   const maxLevel = Array.isArray(workflow) ? workflow.length : 2;
+  const isFullyApproved = request.status === 'approved' && request.currentApprovalLevel === maxLevel;
+  const percent = isFullyApproved ? 100 : ((request.currentApprovalLevel / maxLevel) * 100);
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
@@ -461,13 +507,13 @@ function ApprovalProgress({ request }: { request: PurchaseRequest }) {
           Level {request.currentApprovalLevel} of {maxLevel}
         </span>
         <span className="text-sm text-gray-500">
-          {((request.currentApprovalLevel / maxLevel) * 100).toFixed(0)}% Complete
+          {percent.toFixed(0)}% Complete
         </span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-3">
         <div
           className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-          style={{ width: `${(request.currentApprovalLevel / maxLevel) * 100}%` }}
+          style={{ width: `${percent}%` }}
         />
       </div>
       {Array.isArray(workflow) && (
@@ -487,8 +533,8 @@ function ApprovalProgress({ request }: { request: PurchaseRequest }) {
         </div>
       )}
       <p className="text-xs text-gray-500 mt-2">
-        {request.status === "approved" 
-          ? "Request approved - Procurement in progress" 
+        {isFullyApproved
+          ? "Request approved - Procurement in progress"
           : request.status === "rejected"
           ? "Request has been rejected"
           : request.status === "pending"

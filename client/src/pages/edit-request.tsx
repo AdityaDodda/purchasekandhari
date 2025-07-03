@@ -6,12 +6,15 @@ import { ProgressStepper } from "@/components/ui/progress-stepper";
 import { PurchaseRequestForm } from "@/components/forms/purchase-request-form";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function EditRequest() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
   const [initialData, setInitialData] = useState<any>(null);
+  const [resubmissionComment, setResubmissionComment] = useState("");
 
   const steps = [
     { number: 1, title: "Request Details", completed: false },
@@ -33,10 +36,12 @@ export default function EditRequest() {
   }, [data]);
 
   const handleRequestSubmit = async (formData: any, lineItems: any[], attachments: File[]) => {
-    // PUT to /api/purchase-requests/:id
     try {
-      await apiRequest("PUT", `/api/purchase-requests/${id}`, formData);
-      // Optionally update line items and attachments if needed
+      const body = { ...formData };
+      if (initialData?.status === "returned") {
+        body.resubmissionComment = resubmissionComment;
+      }
+      await apiRequest("PUT", `/api/purchase-requests/${id}`, body);
       setLocation("/my-requests");
     } catch (error) {
       alert("Failed to resubmit request: " + (error.message || error));
@@ -57,6 +62,23 @@ export default function EditRequest() {
             <ProgressStepper steps={steps} currentStep={currentStep} />
           </CardHeader>
         </Card>
+        {initialData?.status === "returned" && (
+          <Card className="mb-6 border-yellow-300 bg-yellow-50">
+            <CardContent className="p-4">
+              <div className="mb-2 text-yellow-900 font-semibold">
+                This request was returned. Please review the comments, make necessary changes, and provide a resubmission comment below. The approval flow will restart from the first approver.
+              </div>
+              <Label htmlFor="resubmissionComment">Resubmission Comment *</Label>
+              <Input
+                id="resubmissionComment"
+                value={resubmissionComment}
+                onChange={e => setResubmissionComment(e.target.value)}
+                placeholder="Explain what you changed or why you are resubmitting"
+                required
+              />
+            </CardContent>
+          </Card>
+        )}
         <PurchaseRequestForm
           currentStep={currentStep}
           onStepChange={setCurrentStep}

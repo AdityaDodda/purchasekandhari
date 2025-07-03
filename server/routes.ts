@@ -430,7 +430,34 @@ export function registerRoutes(app: Express): Server {
 
   app.put("/api/purchase-requests/:id", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Updating purchase requests is not enabled with the current database schema." });
+      const prNumber = req.params.id;
+      const user = req.session.user;
+      // Fetch the purchase request
+      const pr = await storage.getPurchaseRequest(prNumber);
+      if (!pr) return res.status(404).json({ message: "Purchase request not found" });
+      // If resubmitting from 'returned', reset approval flow
+      let updateData = req.body;
+      if (pr.status === 'returned') {
+        // Get approval matrix for requester
+        const approvalMatrixList = await storage.getAllApprovalMatrix();
+        const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(pr.requester_emp_code));
+        if (!approvalMatrix || !approvalMatrix.approver_1_emp_code) {
+          return res.status(400).json({ message: "Approval matrix or first approver not found for requester" });
+        }
+        updateData.status = 'pending';
+        updateData.current_approval_level = 1;
+        updateData.current_approver_emp_code = approvalMatrix.approver_1_emp_code;
+        // Log resubmission
+        await storage.createAuditLog({
+          pr_number: prNumber,
+          approver_emp_code: String(user.emp_code),
+          approval_level: 0,
+          action: "resubmitted",
+          comment: req.body.resubmissionComment || undefined,
+        });
+      }
+      await storage.updatePurchaseRequest(prNumber, updateData);
+      res.json({ message: "Request updated successfully" });
     } catch (error) {
       console.error("Update purchase request error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -517,27 +544,258 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/purchase-requests/:id/approve", requireAuth, requireRole(['approver', 'admin']), async (req: any, res) => {
+  app.post("/api/purchase-requests/:id/approve", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Approval workflow is not enabled with the current database schema." });
+      const prNumber = req.params.id;
+      const user = req.session.user;
+      const comment = req.body.comment || null;
+      // Fetch the purchase request, approval matrix, and audit logs
+      const pr = await storage.getPurchaseRequest(prNumber);
+      if (!pr) return res.status(404).json({ message: "Purchase request not found" });
+      const approvalMatrixList = await storage.getAllApprovalMatrix();
+      const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(pr.requester_emp_code));
+      if (!approvalMatrix) return res.status(400).json({ message: "Approval matrix not found for requester" });
+      const auditLogs = await storage.getAllApprovalHistory ? await storage.getAllApprovalHistory() : [];
+      // Only consider audit logs for this PR
+      const prAuditLogs = auditLogs.filter(l => l.pr_number === prNumber);
+      let currentLevel = pr.current_approval_level || 1;
+      let currentApprover = pr.current_approver_emp_code;
+      const isAdmin = user.role === 'admin';
+      // Only allow if user is current approver (from matrix) or admin
+      let allowed = false;
+      if (isAdmin) allowed = true;
+      else if (currentLevel === 1 && approvalMatrix.approver_1_emp_code === user.emp_code) allowed = true;
+      else if (currentLevel === 2 && approvalMatrix.approver_2_emp_code === user.emp_code) allowed = true;
+      else if (currentLevel === 3 && (approvalMatrix.approver_3a_emp_code === user.emp_code || approvalMatrix.approver_3b_emp_code === user.emp_code)) allowed = true;
+      if (!allowed) {
+        return res.status(403).json({ message: "You are not authorized to approve this request at this stage." });
+      }
+      // Admin override: approve directly
+      if (isAdmin) {
+        console.log(`[APPROVAL] Admin override for PR ${prNumber}`);
+        try {
+          await storage.updatePurchaseRequest(prNumber, {
+            status: "approved",
+            current_approval_level: 3,
+            current_approver_emp_code: String(user.emp_code),
+          });
+        } catch (err) {
+          console.error(`[APPROVAL] ERROR updating PR for admin override:`, err);
+          return res.status(500).json({ message: "Failed to update purchase request (admin override)." });
+        }
+        try {
+          await storage.createAuditLog({
+            pr_number: prNumber,
+            approver_emp_code: String(user.emp_code),
+            approval_level: 99,
+            action: "approved (admin override)",
+            comment,
+          });
+        } catch (err) {
+          console.error(`[APPROVAL] ERROR creating audit log for admin override:`, err);
+        }
+        return res.json({ message: "Request approved by admin." });
+      }
+      // Normal approval flow
+      const nextStep = storage.getNextApprovalStep(approvalMatrix, currentLevel, 'approve', currentApprover, prAuditLogs);
+      console.log(`[APPROVAL] PR ${prNumber} currentLevel=${currentLevel}, nextStep=`, nextStep);
+      if (nextStep.isFinal) {
+        try {
+          await storage.updatePurchaseRequest(prNumber, {
+            status: "approved",
+            current_approval_level: 3,
+            current_approver_emp_code: String(user.emp_code),
+          });
+        } catch (err) {
+          console.error(`[APPROVAL] ERROR updating PR for final approval:`, err);
+          return res.status(500).json({ message: "Failed to update purchase request (final approval)." });
+        }
+        try {
+          await storage.createAuditLog({
+            pr_number: prNumber,
+            approver_emp_code: String(user.emp_code),
+            approval_level: currentLevel,
+            action: "approved",
+            comment,
+          });
+        } catch (err) {
+          console.error(`[APPROVAL] ERROR creating audit log for final approval:`, err);
+        }
+        return res.json({ message: "Request fully approved." });
+      } else {
+        // Move to next approver/level
+        let nextApprover = nextStep.nextApprover;
+        let nextLevel = nextStep.nextLevel;
+        if (!nextApprover || !nextLevel) {
+          console.error(`[APPROVAL] ERROR: nextApprover or nextLevel is missing for PR ${prNumber}. nextStep=`, nextStep);
+          return res.status(500).json({ message: "Approval matrix misconfiguration: next approver or level missing." });
+        }
+        // For parallel, keep both as possible approvers
+        if (Array.isArray(nextApprover)) {
+          try {
+            await storage.createAuditLog({
+              pr_number: prNumber,
+              approver_emp_code: String(user.emp_code),
+              approval_level: currentLevel,
+              action: "approved",
+              comment,
+            });
+          } catch (err) {
+            console.error(`[APPROVAL] ERROR creating audit log for parallel approval:`, err);
+          }
+          const auditLogsNow = await storage.getAllApprovalHistory ? await storage.getAllApprovalHistory() : [];
+          const prAuditLogsNow = auditLogsNow.filter(l => l.pr_number === prNumber);
+          const approvedBy3a = prAuditLogsNow.some(l => l.approver_emp_code === approvalMatrix.approver_3a_emp_code && typeof l.action === 'string' && l.action.startsWith('approved'));
+          const approvedBy3b = prAuditLogsNow.some(l => l.approver_emp_code === approvalMatrix.approver_3b_emp_code && typeof l.action === 'string' && l.action.startsWith('approved'));
+          if (approvedBy3a || approvedBy3b) {
+            try {
+              await storage.updatePurchaseRequest(prNumber, {
+                status: "approved",
+                current_approval_level: 3,
+                current_approver_emp_code: String(user.emp_code),
+              });
+            } catch (err) {
+              console.error(`[APPROVAL] ERROR updating PR for parallel final approval:`, err);
+              return res.status(500).json({ message: "Failed to update purchase request (parallel final approval)." });
+            }
+            return res.json({ message: "Request fully approved." });
+          } else {
+            try {
+              await storage.updatePurchaseRequest(prNumber, {
+                status: "pending",
+                current_approval_level: 3,
+                current_approver_emp_code: null, // Both can approve
+              });
+            } catch (err) {
+              console.error(`[APPROVAL] ERROR updating PR for parallel waiting:`, err);
+              return res.status(500).json({ message: "Failed to update purchase request (parallel waiting)." });
+            }
+            return res.json({ message: "Approved by one, waiting for other approver at level 3." });
+          }
+        } else {
+          console.log(`[APPROVAL] Updating PR ${prNumber} to nextLevel=${nextLevel}, nextApprover=${nextApprover}`);
+          try {
+            await storage.updatePurchaseRequest(prNumber, {
+              status: "pending",
+              current_approval_level: nextLevel,
+              current_approver_emp_code: nextApprover,
+            });
+          } catch (err) {
+            console.error(`[APPROVAL] ERROR updating PR for next approver:`, err);
+            return res.status(500).json({ message: "Failed to update purchase request (next approver)." });
+          }
+          try {
+            await storage.createAuditLog({
+              pr_number: prNumber,
+              approver_emp_code: String(user.emp_code),
+              approval_level: currentLevel,
+              action: "approved",
+              comment,
+            });
+          } catch (err) {
+            console.error(`[APPROVAL] ERROR creating audit log for next approver:`, err);
+          }
+          return res.json({ message: `Moved to next approver at level ${nextLevel}.` });
+        }
+      }
     } catch (error) {
       console.error("Approve request error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
-  app.post("/api/purchase-requests/:id/reject", requireAuth, requireRole(['approver', 'admin']), async (req: any, res) => {
+  app.post("/api/purchase-requests/:id/reject", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Approval workflow is not enabled with the current database schema." });
+      const prNumber = req.params.id;
+      const user = req.session.user;
+      const comment = req.body.comment || null;
+      const pr = await storage.getPurchaseRequest(prNumber);
+      if (!pr) return res.status(404).json({ message: "Purchase request not found" });
+      const approvalMatrixList = await storage.getAllApprovalMatrix();
+      const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(pr.requester_emp_code));
+      if (!approvalMatrix) return res.status(400).json({ message: "Approval matrix not found for requester" });
+      let currentLevel = pr.current_approval_level || 1;
+      const isAdmin = user.role === 'admin';
+      let allowed = false;
+      if (isAdmin) allowed = true;
+      else if (currentLevel === 1 && approvalMatrix.approver_1_emp_code === user.emp_code) allowed = true;
+      else if (currentLevel === 2 && approvalMatrix.approver_2_emp_code === user.emp_code) allowed = true;
+      else if (currentLevel === 3 && (approvalMatrix.approver_3a_emp_code === user.emp_code || approvalMatrix.approver_3b_emp_code === user.emp_code)) allowed = true;
+      if (!allowed) {
+        return res.status(403).json({ message: "You are not authorized to reject this request at this stage." });
+      }
+      // Set status to rejected, clear approver
+      try {
+        await storage.updatePurchaseRequest(prNumber, {
+          status: "rejected",
+          current_approval_level: null,
+          current_approver_emp_code: null,
+        });
+      } catch (err) {
+        console.error(`[REJECT] ERROR updating PR:`, err);
+        return res.status(500).json({ message: "Failed to update purchase request (reject)." });
+      }
+      try {
+        await storage.createAuditLog({
+          pr_number: prNumber,
+          approver_emp_code: user.emp_code,
+          approval_level: 0,
+          action: "rejected",
+          comment,
+        });
+      } catch (err) {
+        console.error(`[REJECT] ERROR creating audit log:`, err);
+      }
+      res.json({ message: "Request rejected." });
     } catch (error) {
       console.error("Reject request error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
-  app.post("/api/purchase-requests/:id/return", requireAuth, requireRole(['approver', 'admin']), async (req: any, res) => {
+  app.post("/api/purchase-requests/:id/return", requireAuth, async (req: any, res) => {
     try {
-      return res.status(501).json({ message: "Feature not implemented: Approval workflow is not enabled with the current database schema." });
+      const prNumber = req.params.id;
+      const user = req.session.user;
+      const comment = req.body.comment || null;
+      const pr = await storage.getPurchaseRequest(prNumber);
+      if (!pr) return res.status(404).json({ message: "Purchase request not found" });
+      const approvalMatrixList = await storage.getAllApprovalMatrix();
+      const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(pr.requester_emp_code));
+      if (!approvalMatrix) return res.status(400).json({ message: "Approval matrix not found for requester" });
+      let currentLevel = pr.current_approval_level || 1;
+      const isAdmin = user.role === 'admin';
+      let allowed = false;
+      if (isAdmin) allowed = true;
+      else if (currentLevel === 1 && approvalMatrix.approver_1_emp_code === user.emp_code) allowed = true;
+      else if (currentLevel === 2 && approvalMatrix.approver_2_emp_code === user.emp_code) allowed = true;
+      else if (currentLevel === 3 && (approvalMatrix.approver_3a_emp_code === user.emp_code || approvalMatrix.approver_3b_emp_code === user.emp_code)) allowed = true;
+      if (!allowed) {
+        return res.status(403).json({ message: "You are not authorized to return this request at this stage." });
+      }
+      // Set status to returned, clear approver
+      try {
+        await storage.updatePurchaseRequest(prNumber, {
+          status: "returned",
+          current_approval_level: null,
+          current_approver_emp_code: null,
+        });
+      } catch (err) {
+        console.error(`[RETURN] ERROR updating PR:`, err);
+        return res.status(500).json({ message: "Failed to update purchase request (return)." });
+      }
+      try {
+        await storage.createAuditLog({
+          pr_number: prNumber,
+          approver_emp_code: user.emp_code,
+          approval_level: 0,
+          action: "returned",
+          comment,
+        });
+      } catch (err) {
+        console.error(`[RETURN] ERROR creating audit log:`, err);
+      }
+      res.json({ message: "Request returned for edit." });
     } catch (error) {
       console.error("Return request error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -614,104 +872,10 @@ export function registerRoutes(app: Express): Server {
       res.json(result);
     } catch (error) {
       console.error(`Error fetching ${req.params.type} master data:`, error);
-      res.status(500).json({ message: `Failed to fetch ${req.params.type} data` });
+      res.status(500).json({ message: `Error fetching ${req.params.type} master data: ${error instanceof Error ? error.message : String(error)}` });
     }
   });
-
-  app.post('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
-    try {
-      const { type } = req.params;
-      let result;
-
-      switch (type) {
-        case 'users':
-          const userData = insertUserSchema.parse(req.body);
-          const hashedPassword = await bcrypt.hash(userData.password, 10);
-          result = await storage.createUser({ ...userData, password: hashedPassword, must_reset_password: true });
-          break;
-        case 'departments':
-          result = await storage.createDepartment(req.body);
-          break;
-        case 'sites':
-          result = await storage.createSite(req.body);
-          break;
-        case 'approval-matrix':
-          result = await storage.createApprovalMatrix(req.body);
-          break;
-        default:
-          return res.status(400).json({ message: 'Invalid master type or master type not supported by current schema.' });
-      }
-
-      res.status(201).json(result);
-    } catch (error: any) {
-      console.error(`Error creating ${req.params.type}:`, error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: `Failed to create ${req.params.type}`, details: error.message });
-    }
-  });
-
-  app.put('/api/admin/masters/:type/:id', requireAuth, requireRole(['admin']), async (req: any, res) => {
-    try {
-      const { type, id } = req.params;
-      let result;
-
-      switch (type) {
-        case 'users':
-          if (req.body.password && req.body.password.length > 0) {
-            req.body.password = await bcrypt.hash(req.body.password, 10);
-          }
-          result = await storage.updateUser(id, req.body);
-          break;
-        case 'departments':
-          result = await storage.updateDepartment(id, req.body);
-          break;
-        case 'sites':
-          result = await storage.updateSite(BigInt(id), req.body);
-          break;
-        case 'approval-matrix':
-          result = await storage.updateApprovalMatrix(id, req.body);
-          break;
-        default:
-          return res.status(400).json({ message: 'Invalid master type or master type not supported by current schema.' });
-      }
-
-      res.json(result);
-    } catch (error: any) {
-      console.error(`Error updating ${req.params.type}:`, error);
-      res.status(500).json({ message: `Failed to update ${req.params.type}`, details: error.message });
-    }
-  });
-
-  app.delete('/api/admin/masters/:type/:id', requireAuth, requireRole(['admin']), async (req: any, res) => {
-    try {
-      const { type, id } = req.params;
-
-      switch (type) {
-        case 'users':
-          await storage.deleteUser(id);
-          break;
-        case 'departments':
-          await storage.deleteDepartment(id);
-          break;
-        case 'sites':
-          await storage.deleteSite(BigInt(id));
-          break;
-        case 'approval-matrix':
-          await storage.deleteApprovalMatrix(id);
-          break;
-        default:
-          return res.status(400).json({ message: 'Invalid master type or master type not supported by current schema.' });
-      }
-
-      res.json({ message: 'Record deleted successfully' });
-    } catch (error: any) {
-      console.error(`Error deleting ${req.params.type}:`, error);
-      res.status(500).json({ message: `Failed to delete ${req.params.type}`, details: error.message });
-    }
-  });
-
+  
   app.get('/api/inventory', requireAuth, async (req: any, res) => {
     try {
       const search = (req.query.search as string) || "";
@@ -720,24 +884,6 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error fetching inventory:', error);
       res.status(500).json({ message: 'Failed to fetch inventory' });
-    }
-  });
-
-  app.get("/api/approval-workflow", requireAuth, async (req, res) => {
-    try {
-      return res.status(501).json({ message: "Feature not implemented: Dynamic approval workflow is not enabled with the current database schema (uses fixed approval_matrix)." });
-    } catch (error) {
-      console.error("Get approval workflow error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.get("/api/approval-history/:requestId", requireAuth, async (req, res) => {
-    try {
-      return res.status(501).json({ message: "Feature not implemented: Approval history is not enabled with the current database schema." });
-    } catch (error) {
-      console.error("Get approval history error:", error);
-      res.status(500).json({ message: "Internal server error" });
     }
   });
 

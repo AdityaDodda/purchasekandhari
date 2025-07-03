@@ -291,7 +291,7 @@ export class DatabaseStorage implements IStorage {
 
   // Stubs for non-implemented PR/LineItem/etc. features
   async getPurchaseRequest(id: string): Promise<PurchaseRequest | null> {
-    throw new Error("Method not implemented.");
+    return this.prisma.purchase_requests.findUnique({ where: { pr_number: id } });
   }
   async getAllPurchaseRequests(filters: any = {}): Promise<any[]> {
     const where: any = {};
@@ -302,8 +302,13 @@ export class DatabaseStorage implements IStorage {
         { requester_emp_code: filters.createdBy },
       ];
     }
-    if (filters.currentApproverId) {
-      where.current_approver_emp_code = filters.currentApproverId;
+    // Parallel approval logic for level 3
+    if (filters.approverEmpCode) {
+      where.OR = where.OR || [];
+      // Normal case: current approver
+      where.OR.push({ current_approver_emp_code: filters.approverEmpCode });
+      // Parallel case: level 3, current_approver_emp_code is null, user is 3a or 3b
+      // We'll filter these after fetching, since Prisma can't join approval_matrix easily here
     }
     if (filters.status) {
       where.status = filters.status;
@@ -314,6 +319,7 @@ export class DatabaseStorage implements IStorage {
     if (filters.location) {
       where.location = filters.location;
     }
+    // Fetch requests
     const requests = await this.prisma.purchase_requests.findMany({
       where,
       orderBy: { created_at: 'desc' },
@@ -321,8 +327,42 @@ export class DatabaseStorage implements IStorage {
         line_items: true,
       },
     });
+    // Fetch approval matrix for all relevant requester_emp_codes
+    const empCodes = Array.from(new Set(requests.map((r: any) => r.requester_emp_code).filter(Boolean)));
+    const approvalMatrices = await this.prisma.approval_matrix.findMany({
+      where: { emp_code: { in: empCodes } },
+    });
+    const matrixMap = Object.fromEntries(approvalMatrices.map(m => [m.emp_code, m]));
+    // If parallel approval filter, filter in JS for level 3
+    let filteredRequests = requests;
+    if (filters.approverEmpCode) {
+      filteredRequests = requests.filter((req: any) => {
+        if (req.current_approver_emp_code === filters.approverEmpCode) return true;
+        // If approved at level 3, only show to the approver who approved
+        if (
+          req.status === 'approved' &&
+          req.currentApprovalLevel === 3 &&
+          req.current_approver_emp_code &&
+          req.current_approver_emp_code === filters.approverEmpCode
+        ) {
+          return true;
+        }
+        // Parallel approval: level 3, current_approver_emp_code is null
+        const matrix = matrixMap[req.requester_emp_code];
+        if (
+          req.current_approval_level === 3 &&
+          !req.current_approver_emp_code &&
+          matrix &&
+          (matrix.approver_3a_emp_code === filters.approverEmpCode ||
+            matrix.approver_3b_emp_code === filters.approverEmpCode)
+        ) {
+          return true;
+        }
+        return false;
+      });
+    }
     // Map DB fields to API fields expected by frontend
-    return requests.map((req: any) => ({
+    return filteredRequests.map((req: any) => ({
       id: req.pr_number, // Map pr_number to id
       requisitionNumber: req.pr_number, // Also provide as requisitionNumber
       title: req.title,
@@ -339,11 +379,16 @@ export class DatabaseStorage implements IStorage {
       createdAt: req.created_at,
       updatedAt: req.updated_at,
       lineItems: req.line_items,
+      approvalMatrix: matrixMap[req.requester_emp_code],
       // Add more fields as needed
     }));
   }
   async updatePurchaseRequest(id: string, request: Partial<InsertPurchaseRequest>): Promise<PurchaseRequest> {
-    throw new Error("Method not implemented.");
+    // Implement update logic for purchase_requests
+    return this.prisma.purchase_requests.update({
+      where: { pr_number: id },
+      data: request,
+    });
   }
   async deletePurchaseRequest(id: string): Promise<void> {
     throw new Error("Method not implemented.");
@@ -403,7 +448,7 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
   async getAllApprovalHistory(): Promise<ApprovalHistory[]> {
-    throw new Error("Method not implemented.");
+    return this.prisma.audit_logs.findMany();
   }
 
   async getApprovalWorkflow(id: number): Promise<ApprovalWorkflow | null> {
@@ -650,6 +695,75 @@ export class DatabaseStorage implements IStorage {
             vendors: true,
           },
         },
+      },
+    });
+  }
+
+  /**
+   * Helper to get the next approver and approval level from the approval_matrix for a given request and action.
+   * @param approvalMatrix ApprovalMatrix
+   * @param currentLevel number
+   * @param action 'approve' | 'return' | 'reject'
+   * @param currentApprover string
+   * @param auditLogs any[]
+   * @returns { nextLevel: number | null, nextApprover: string | null, isFinal: boolean, isParallel: boolean }
+   */
+  getNextApprovalStep(approvalMatrix: ApprovalMatrix, currentLevel: number, action: string, currentApprover: string, auditLogs: any[] = []) {
+    if (action === 'return' || action === 'reject') {
+      return { nextLevel: null, nextApprover: null, isFinal: false, isParallel: false };
+    }
+    if (currentLevel === 1 && approvalMatrix.approver_2_emp_code) {
+      return { nextLevel: 2, nextApprover: approvalMatrix.approver_2_emp_code, isFinal: false, isParallel: false };
+    }
+    if (currentLevel === 2 && (approvalMatrix.approver_3a_emp_code || approvalMatrix.approver_3b_emp_code)) {
+      // Parallel approval at level 3
+      // Only consider audit logs for the current PR and current approval cycle
+      let relevantLogs = auditLogs;
+      // Find the last 'returned' or 'rejected' action (if any)
+      const lastReturnOrRejectIdx = auditLogs
+        .map((l, idx) => ({ action: l.action, idx }))
+        .reverse()
+        .find(l => l.action === 'returned' || l.action === 'rejected');
+      if (lastReturnOrRejectIdx) {
+        // Only consider logs after the last return/reject
+        const cutoff = auditLogs.length - lastReturnOrRejectIdx.idx;
+        relevantLogs = auditLogs.slice(cutoff);
+      }
+      if (approvalMatrix.approver_3a_emp_code && approvalMatrix.approver_3b_emp_code) {
+        // If either 3a or 3b has already approved in this cycle, it's final
+        const approvedBy3a = relevantLogs.some(l => l.approver_emp_code === approvalMatrix.approver_3a_emp_code && l.action === 'approved');
+        const approvedBy3b = relevantLogs.some(l => l.approver_emp_code === approvalMatrix.approver_3b_emp_code && l.action === 'approved');
+        if (approvedBy3a || approvedBy3b) {
+          return { nextLevel: null, nextApprover: null, isFinal: true, isParallel: true };
+        }
+        // Otherwise, assign to both (frontend/backend should allow either to approve)
+        return { nextLevel: 3, nextApprover: [approvalMatrix.approver_3a_emp_code, approvalMatrix.approver_3b_emp_code], isFinal: false, isParallel: true };
+      } else if (approvalMatrix.approver_3a_emp_code) {
+        return { nextLevel: 3, nextApprover: approvalMatrix.approver_3a_emp_code, isFinal: true, isParallel: false };
+      } else if (approvalMatrix.approver_3b_emp_code) {
+        return { nextLevel: 3, nextApprover: approvalMatrix.approver_3b_emp_code, isFinal: true, isParallel: false };
+      }
+    }
+    // If no more approvers, it's final
+    return { nextLevel: null, nextApprover: null, isFinal: true, isParallel: false };
+  }
+
+  async createAuditLog(data: {
+    pr_number?: string;
+    approver_emp_code?: string;
+    approval_level?: number;
+    action?: string;
+    comment?: string;
+    acted_at?: Date;
+  }): Promise<any> {
+    return this.prisma.audit_logs.create({
+      data: {
+        pr_number: data.pr_number ?? null,
+        approver_emp_code: data.approver_emp_code ?? null,
+        approval_level: data.approval_level ?? null,
+        action: data.action ?? null,
+        comment: data.comment ?? null,
+        acted_at: data.acted_at || new Date(),
       },
     });
   }
