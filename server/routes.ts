@@ -947,6 +947,18 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.get("/api/purchase-requests/:id/audit-logs", requireAuth, async (req, res) => {
+    try {
+      const prNumber = req.params.id;
+      const auditLogs = await storage.getAllApprovalHistory();
+      const prAuditLogs = auditLogs.filter(l => l.pr_number === prNumber);
+      res.json(prAuditLogs);
+    } catch (error) {
+      console.error("Get audit logs error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

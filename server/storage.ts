@@ -450,7 +450,9 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
   async getAllApprovalHistory(): Promise<ApprovalHistory[]> {
-    return this.prisma.audit_logs.findMany();
+    return this.prisma.audit_logs.findMany({
+      include: { users: true }
+    });
   }
 
   async getApprovalWorkflow(id: number): Promise<ApprovalWorkflow | null> {

@@ -20,7 +20,8 @@ import {
   PaginationPrevious,
   PaginationNext,
 } from "@/components/ui/pagination";
-import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
+import { Comments } from "@/components/ui/comments";
+import { AuditLog } from "@/components/ui/audit-log";
 
 type User = {
   id: string;
@@ -441,7 +442,12 @@ export default function Dashboard() {
                 <Separator />
 
                 {/* Comments and Audit Log */}
-                <CommentsAuditLog purchaseRequestId={selectedRequest?.id} />
+                {selectedRequest?.id && (
+                  <>
+                    <Comments purchaseRequestId={selectedRequest.id} />
+                    <AuditLog purchaseRequestId={selectedRequest.id} />
+                  </>
+                )}
 
                 {/* Progress Information */}
                 {selectedRequest && (

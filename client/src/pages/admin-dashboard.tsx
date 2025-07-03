@@ -15,7 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { LineItemsGrid } from "@/components/ui/line-items-grid";
-import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
+import { Comments } from "@/components/ui/comments";
+import { AuditLog } from "@/components/ui/audit-log";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -522,7 +523,10 @@ export default function AdminDashboard() {
               {/* <ApprovalProgress request={selectedRequest} />  // Assuming this component exists */}
               {/* Show Comments & Audit Log below approval progress only when viewing details */}
               {selectedRequest?.id && (
-                <CommentsAuditLog purchaseRequestId={selectedRequest.id} />
+                <>
+                  <Comments purchaseRequestId={selectedRequest.id} />
+                  <AuditLog purchaseRequestId={selectedRequest.id} />
+                </>
               )}
             </div>
             <Separator />
