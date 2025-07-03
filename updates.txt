@@ -39,3 +39,8 @@ if a user raises a pr and the approver returns the request because it is wrong d
 PR-FINA-202506-006
 
 Updated PR Format PR-Entity-KGBPL-yearmonth-counter
+
+
+Need to do first
+return
+approval progress set like after a approver clicks ok on the comment we have to update the progress and approved state also

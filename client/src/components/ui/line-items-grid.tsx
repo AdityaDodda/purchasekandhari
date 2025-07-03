@@ -16,11 +16,11 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 interface LineItem {
   id?: number;
   itemName: string;
-  requiredQuantity: number;
+  requiredQuantity: string | number;
   unitOfMeasure: string;
   requiredByDate: string;
   deliveryLocation: string;
-  estimatedCost: number;
+  estimatedCost: string | number;
   itemJustification?: string;
   vendor?: any;
 }
@@ -38,11 +38,11 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<any>(null);
   const [formData, setFormData] = useState<LineItem>({
     itemName: "",
-    requiredQuantity: "" as any,
+    requiredQuantity: "",
     unitOfMeasure: "",
     requiredByDate: "",
     deliveryLocation: "",
-    estimatedCost: "" as any,
+    estimatedCost: "",
     itemJustification: "",
   });
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -81,15 +81,23 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
 
   // Add Item handler
   const handleAddItem = () => {
+    if (!formData.requiredQuantity || isNaN(Number(formData.requiredQuantity)) || Number(formData.requiredQuantity) <= 0) {
+      toast({ title: "Required Quantity is mandatory", description: "Please enter a valid quantity.", variant: "destructive" });
+      return;
+    }
+    if (!formData.requiredByDate || formData.requiredByDate.trim() === "") {
+      toast({ title: "Required By Date is mandatory", description: "Please select a required by date.", variant: "destructive" });
+      return;
+    }
     const newItem = { ...formData };
     onItemsChange([...items, newItem]);
     setFormData({
       itemName: "",
-      requiredQuantity: "" as any,
+      requiredQuantity: "",
       unitOfMeasure: "",
       requiredByDate: "",
       deliveryLocation: "",
-      estimatedCost: "" as any,
+      estimatedCost: "",
       itemJustification: "",
     });
     setShowAddDialog(false);
@@ -97,6 +105,14 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
 
   // Edit Item handler
   const handleUpdateItem = () => {
+    if (!formData.requiredQuantity || isNaN(Number(formData.requiredQuantity)) || Number(formData.requiredQuantity) <= 0) {
+      toast({ title: "Required Quantity is mandatory", description: "Please enter a valid quantity.", variant: "destructive" });
+      return;
+    }
+    if (!formData.requiredByDate || formData.requiredByDate.trim() === "") {
+      toast({ title: "Required By Date is mandatory", description: "Please select a required by date.", variant: "destructive" });
+      return;
+    }
     const updatedItem = { 
       ...formData,
       requiredQuantity: parseFloat(formData.requiredQuantity as string) || 0,
@@ -224,7 +240,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                             setFormData({
                               ...formData,
                               itemName: item.productname || item.itemnumber,
-                              requiredQuantity: "" as any,
+                              requiredQuantity: "",
                               estimatedCost: item.unitcost || "",
                               unitOfMeasure: item.bomunitsymbol || "",
                             });
@@ -250,7 +266,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                               setFormData({
                                 ...formData,
                                 itemName: item.productname || item.itemnumber,
-                                requiredQuantity: "" as any,
+                                requiredQuantity: "",
                                 estimatedCost: item.unitcost || "",
                                 unitOfMeasure: item.bomunitsymbol || "",
                               });
@@ -272,7 +288,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="requiredQuantity">Required Quantity</Label>
+                  <Label htmlFor="requiredQuantity">Required Quantity *</Label>
                   <Input
                     id="requiredQuantity"
                     type="text"
@@ -296,7 +312,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   />
                 </div>
                 <div>
-                  <Label htmlFor="requiredByDate">Required By Date</Label>
+                  <Label htmlFor="requiredByDate">Required By Date *</Label>
                   <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
                       <button
@@ -333,7 +349,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   />
                 </div>
                 <div>
-                  <Label htmlFor="estimatedCost">Estimated Cost (₹)</Label>
+                  <Label htmlFor="estimatedCost">Estimated Per Unit Cost (₹)</Label>
                   <Input
                     id="estimatedCost"
                     type="text"
@@ -418,13 +434,13 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b">
-                    <th className="text-left p-3 font-semibold text-sm border-r">#</th>
+                    <th className="text-left p-3 font-semibold text-sm border-r">S.No</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Item Name</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Qty</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Unit</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Required By</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Location</th>
-                    <th className="text-left p-3 font-semibold text-sm border-r">Unit Cost (₹)</th>
+                    <th className="text-left p-3 font-semibold text-sm border-r">Per Unit Item Cost (₹)</th>
                     {editable && <th className="text-center p-3 font-semibold text-sm">Actions</th>}
                   </tr>
                 </thead>
@@ -481,7 +497,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <td colSpan={editable ? 7 : 6} className="p-3 text-right font-semibold text-sm">
                       Total Estimated Cost:
                     </td>
-                    <td className="p-3 border-r font-bold text-lg text-green-700">
+                    <td className="p-3 font-bold text-lg text-green-700">
                       {formatIndianCurrency(totalCost)}
                     </td>
                     {editable && <td className="p-3"></td>}

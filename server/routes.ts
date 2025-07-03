@@ -76,8 +76,8 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      // 'application/msword',
+      // 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'image/jpeg',
       'image/png',
@@ -924,6 +924,26 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error fetching locations:', error);
       res.status(500).json({ message: 'Failed to fetch locations' });
+    }
+  });
+
+  // Download a specific attachment by id
+  app.get("/api/attachments/:id/download", requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid attachment id" });
+      const attachment = await storage.getAttachment(id);
+      if (!attachment) return res.status(404).json({ message: "Attachment not found" });
+      // Use the file_path to send the file
+      const filePath = path.resolve(attachment.file_path);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found on server" });
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.original_name}"`);
+      res.setHeader('Content-Type', attachment.mime_type);
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error("Download attachment error:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Clock, CheckCircle, XCircle, Package, Calendar, MapPin, DollarSign } from "lucide-react";
+import { FileText, Clock, CheckCircle, XCircle, Package, Calendar, MapPin, DollarSign, Paperclip } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +77,16 @@ export default function Dashboard() {
   const { data: requestDetails, isLoading: isLoadingDetails } = useQuery<PurchaseRequest>({
     queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
     enabled: !!selectedRequest?.id,
+  });
+
+  const { data: attachments = [], isLoading: isLoadingAttachments } = useQuery({
+    queryKey: [selectedRequest?.requisitionNumber, 'attachments'],
+    queryFn: async () => {
+      if (!selectedRequest?.requisitionNumber) return [];
+      const res = await fetch(`/api/purchase-requests/${selectedRequest.requisitionNumber}/attachments`, { credentials: 'include' });
+      return res.json();
+    },
+    enabled: !!selectedRequest?.requisitionNumber && showDetailsModal,
   });
 
   // Reset page to 1 when requests data changes
@@ -391,6 +401,45 @@ export default function Dashboard() {
 
                 <Separator />
 
+                {/* Attachments */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Paperclip className="h-5 w-5 mr-2 text-blue-600" />
+                    Attachments
+                  </h3>
+                  {isLoadingAttachments ? (
+                    <div className="text-gray-500">Loading attachments...</div>
+                  ) : attachments.length > 0 ? (
+                    <ul className="space-y-2">
+                      {attachments.map((file: any) => (
+                        <li key={file.id} className="flex items-center space-x-2">
+                          <a
+                            href={`/${file.file_path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {file.original_name}
+                          </a>
+                          <span className="text-xs text-gray-400">({(file.file_size / 1024).toFixed(1)} KB)</span>
+                          <button
+                            className="ml-2 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+                            onClick={() => {
+                              window.open(`/api/attachments/${file.id}/download`, '_blank');
+                            }}
+                          >
+                            Download
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-gray-500">No attachments uploaded for this request.</div>
+                  )}
+                </div>
+
+                <Separator />
+
                 {/* Comments and Audit Log */}
                 <CommentsAuditLog purchaseRequestId={selectedRequest?.id} />
 
@@ -413,12 +462,12 @@ export default function Dashboard() {
                           <Button
                             className="bg-green-600 hover:bg-green-700 text-white"
                             onClick={async () => {
-                              const comments = prompt("Enter approval comments (optional):");
+                              const comment = prompt("Enter approval comments (optional):");
                               try {
                                 await fetch(`/api/purchase-requests/${selectedRequest.id}/approve`, {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ comments }),
+                                  body: JSON.stringify({ comment }),
                                   credentials: 'include',
                                 });
                                 alert('Request approved!');

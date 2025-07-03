@@ -431,8 +431,10 @@ export class DatabaseStorage implements IStorage {
       },
     });
   }
-  async getAttachment(id: number): Promise<Attachment | null> {
-    throw new Error("Method not implemented.");
+  async getAttachment(id: number): Promise<any> {
+    return this.prisma.attachments.findUnique({
+      where: { id },
+    });
   }
   async getAllAttachments(): Promise<Attachment[]> {
     throw new Error("Method not implemented.");

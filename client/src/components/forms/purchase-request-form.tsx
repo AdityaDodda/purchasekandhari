@@ -67,7 +67,7 @@ const requestDetailsSchema = z.object({
   department: z.string().min(1, "Department is required"),
   location: z.string().min(1, "Location is required"),
   businessJustificationCode: z.string().min(1, "Business justification code is required"),
-  businessJustificationDetails: z.string().min(50, "Business justification must be at least 50 characters"),
+  businessJustificationDetails: z.string()/*.min(50, "Business justification must be at least 50 characters")*/,
   entity: z.string().min(1, "Entity is required"),
 });
 
@@ -329,7 +329,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                 </div>
 
                 <div className="md:col-span-2">
-                  <Label htmlFor="businessJustificationDetails">Business Justification Details *</Label>
+                  <Label htmlFor="businessJustificationDetails">Business Justification Details</Label>
                   <Textarea
                     id="businessJustificationDetails"
                     {...register("businessJustificationDetails")}
@@ -337,10 +337,10 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
                     placeholder="Provide detailed business justification..."
                     className="resize-none"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Minimum 50 characters required</p>
+                  {/* <p className="text-xs text-gray-500 mt-1">Minimum 50 characters required</p>
                   {errors.businessJustificationDetails && (
                     <p className="text-sm text-destructive mt-1">{errors.businessJustificationDetails.message}</p>
-                  )}
+                  )} */}
                 </div>
               </div>
 
@@ -397,8 +397,8 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
               maxFileSize={10 * 1024 * 1024} // 10MB
               acceptedFileTypes={[
                 'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                // 'application/msword',
+                // 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'application/vnd.ms-excel',
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'image/jpeg',

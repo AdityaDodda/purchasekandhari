@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Download, Filter, TrendingUp, Clock, DollarSign, BarChart3, Package, Calendar, MapPin, Database } from "lucide-react";
+import { Search, Download, Filter, TrendingUp, Clock, DollarSign, BarChart3, Package, Calendar, MapPin, Database, Paperclip } from "lucide-react";
 import qs from "query-string";
 import * as XLSX from 'xlsx'; // 1. Import xlsx library
 import { Navbar } from "@/components/layout/navbar";
@@ -96,6 +96,16 @@ export default function AdminDashboard() {
     enabled: !!selectedRequest,
   });
 
+  const { data: attachments = [], isLoading: isLoadingAttachments } = useQuery({
+    queryKey: [selectedRequest?.requisitionNumber, 'attachments'],
+    queryFn: async () => {
+      if (!selectedRequest?.requisitionNumber) return [];
+      const res = await fetch(`/api/purchase-requests/${selectedRequest.requisitionNumber}/attachments`, { credentials: 'include' });
+      return res.json();
+    },
+    enabled: !!selectedRequest?.requisitionNumber && showDetailsModal,
+  });
+
   useEffect(() => {
     setPage(1);
   }, [requests]);
@@ -160,8 +170,8 @@ export default function AdminDashboard() {
 
   // Action mutations
   const approveMutation = useMutation({
-    mutationFn: async ({ id, comments }: { id: number; comments?: string }) => {
-      return apiRequest("POST", `/api/purchase-requests/${id}/approve`, { comments });
+    mutationFn: async ({ id, comment }: { id: number; comment?: string }) => {
+      return apiRequest("POST", `/api/purchase-requests/${id}/approve`, { comment });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
@@ -199,8 +209,8 @@ export default function AdminDashboard() {
   });
 
   const handleApproveRequest = (id: number) => {
-    const comments = prompt("Enter approval comments (optional):");
-    approveMutation.mutate({ id, comments: comments || undefined });
+    const comment = prompt("Enter approval comments (optional):");
+    approveMutation.mutate({ id, comment: comment || undefined });
   };
 
   const handleRejectRequest = (id: number) => {
@@ -504,15 +514,53 @@ export default function AdminDashboard() {
 
         {/* Detailed View Modal */}
         <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          {/* ...dialog content... */}
-          {selectedRequest && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Request Details</DialogTitle>
+            </DialogHeader>
             <div>
               <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
               {/* <ApprovalProgress request={selectedRequest} />  // Assuming this component exists */}
               {/* Show Comments & Audit Log below approval progress only when viewing details */}
               <CommentsAuditLog purchaseRequestId={selectedRequest.id} />
             </div>
-          )}
+            <Separator />
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <Paperclip className="h-5 w-5 mr-2 text-blue-600" />
+                Attachments
+              </h3>
+              {isLoadingAttachments ? (
+                <div className="text-gray-500">Loading attachments...</div>
+              ) : attachments.length > 0 ? (
+                <ul className="space-y-2">
+                  {attachments.map((file: any) => (
+                    <li key={file.id} className="flex items-center space-x-2">
+                      <a
+                        href={`/${file.file_path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        {file.original_name}
+                      </a>
+                      <span className="text-xs text-gray-400">({(file.file_size / 1024).toFixed(1)} KB)</span>
+                      <button
+                        className="ml-2 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+                        onClick={() => {
+                          window.open(`/api/attachments/${file.id}/download`, '_blank');
+                        }}
+                      >
+                        Download
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-gray-500">No attachments uploaded for this request.</div>
+              )}
+            </div>
+          </DialogContent>
         </Dialog>
       </div>
     </div>

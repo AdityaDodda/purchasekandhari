@@ -81,7 +81,7 @@ export default function ResetPasswordPage() {
           <Building2 className="w-10 h-10 text-blue-600" />
           <h1 className="text-3xl font-bold">Reset Password</h1>
           <p className="text-gray-500 dark:text-gray-400">
-            Enter a new password for your account.
+            As you are first time logging in you have to reset password.
           </p>
         </div>
         <Form {...form}>

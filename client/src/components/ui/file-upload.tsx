@@ -153,7 +153,7 @@ export function FileUpload({
             Select Files
           </Button>
           <p className="text-xs text-gray-400 mt-4">
-            Supported formats: PDF, XLSX (Max: {Math.round(maxFileSize / (1024 * 1024))}MB each)
+            Supported formats: PDF, XLSX, PNG, JPG (Max: {Math.round(maxFileSize / (1024 * 1024))}MB each)
           </p>
         </CardContent>
       </Card>

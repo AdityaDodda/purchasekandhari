@@ -240,7 +240,7 @@ export default function Login() {
               {loginMutation.isPending ? "Signing in..." : "Sign In"}
             </Button>
 
-            <div className="text-center">
+            {/* <div className="text-center">
               <span className="text-gray-600 text-sm">Don't have an account? </span>
               <a
                 href="/signup"
@@ -248,7 +248,7 @@ export default function Login() {
               >
                 Sign up
               </a>
-            </div>
+            </div> */}
           </form>
         </CardContent>
       </Card>

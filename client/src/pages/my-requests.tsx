@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query"; // Keep this as primary useQuery
 import { Plus, Search, Download, Filter, X, Calendar, MapPin, Package, DollarSign, Paperclip } from "lucide-react";
 import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
 
@@ -22,6 +22,8 @@ import {
   PaginationPrevious,
   PaginationNext,
 } from "@/components/ui/pagination";
+// Removed the redundant 'useReactQuery' import alias if it refers to the same TanStack useQuery
+// import { useQuery as useReactQuery } from "@tanstack/react-query"; 
 
 export default function MyRequests() {
   const [, setLocation] = useLocation();
@@ -35,28 +37,56 @@ export default function MyRequests() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
+  // Use the primary useQuery for all queries
   const { data: requests, isLoading } = useQuery({
     queryKey: ["/api/purchase-requests", filters],
-  });
-
-  const { data: requestDetails, isLoading: isLoadingDetails } = useQuery({
-    queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
-    enabled: !!selectedRequest,
-  });
-
-  const { data: attachments, isLoading: isLoadingAttachments } = useQuery({
-    queryKey: [selectedRequest?.pr_number, 'attachments'],
     queryFn: async () => {
-      if (!selectedRequest?.pr_number) return [];
-      const res = await fetch(`/api/purchase-requests/${selectedRequest.pr_number}/attachments`, { credentials: 'include' });
+      // Simulate fetching data with filters
+      // In a real app, you would include filters in the API call
+      const params = new URLSearchParams(filters).toString();
+      const res = await fetch(`/api/purchase-requests?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch requests');
+      return res.json();
+    }
+  });
+
+  const { data: user } = useQuery({ // Changed from useReactQuery to useQuery for consistency
+    queryKey: ["/api/auth/user"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/user", { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch user');
+      return res.json();
+    }
+  });
+
+  const { data: requestDetails = {} as any, isLoading: isLoadingDetails } = useQuery({
+    queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
+    queryFn: async () => {
+      const res = await fetch(`/api/purchase-requests/${selectedRequest.id}/details`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch request details');
       return res.json();
     },
-    enabled: !!selectedRequest?.pr_number && showDetailsModal,
+    enabled: !!selectedRequest, // Only run this query if a request is selected
+  });
+
+  const { data: attachments = [], isLoading: isLoadingAttachments } = useQuery({
+    queryKey: [selectedRequest?.requisitionNumber, 'attachments'],
+    queryFn: async () => {
+      if (!selectedRequest?.requisitionNumber) return [];
+      const res = await fetch(`/api/purchase-requests/${selectedRequest.requisitionNumber}/attachments`, { credentials: 'include' });
+      if (!res.ok) {
+        console.error(`Failed to fetch attachments for requisition: ${selectedRequest.requisitionNumber}`);
+        return [];
+      }
+      return res.json();
+    },
+    enabled: !!selectedRequest?.requisitionNumber && showDetailsModal,
   });
 
   useEffect(() => {
+    // Reset page to 1 when filters or requests data change
     setPage(1);
-  }, [requests]);
+  }, [filters, requests]); // Added filters to dependency array
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -70,6 +100,11 @@ export default function MyRequests() {
   const handleEditResubmit = (request: any) => {
     setLocation(`/edit-request/${request.id}`);
   };
+
+  // Defensive: ensure requests is always an array
+  const safeRequests = Array.isArray(requests) ? requests : [];
+  // Defensive: ensure requestDetails is always an object
+  const safeRequestDetails = requestDetails && typeof requestDetails === 'object' ? requestDetails : {};
 
   if (isLoading) {
     return (
@@ -107,7 +142,7 @@ export default function MyRequests() {
         </div>
 
         {/* Alert for Returned/Rejected Requests */}
-        {requests && requests.filter((r: any) => r.status === 'returned' || r.status === 'rejected').length > 0 && (
+        {safeRequests && safeRequests.filter && safeRequests.filter((r: any) => r.status === 'returned' || r.status === 'rejected').length > 0 && (
           <Card className="mb-6 border-red-200 bg-red-50">
             <CardContent className="p-4">
               <div className="flex items-start space-x-3">
@@ -119,10 +154,10 @@ export default function MyRequests() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-red-800 mb-2">Action Required</h3>
                   <p className="text-red-700 mb-3">
-                    You have {requests.filter((r: any) => r.status === 'returned').length} returned and {requests.filter((r: any) => r.status === 'rejected').length} rejected requests that need your attention.
+                    You have {safeRequests.filter((r: any) => r.status === 'returned').length} returned and {safeRequests.filter((r: any) => r.status === 'rejected').length} rejected requests that need your attention.
                   </p>
                   <div className="space-y-2">
-                    {requests.filter((r: any) => r.status === 'returned' || r.status === 'rejected').slice(0, 3).map((request: any) => (
+                    {safeRequests.filter((r: any) => r.status === 'returned' || r.status === 'rejected').slice(0, 3).map((request: any) => (
                       <div key={request.id} className="bg-white rounded p-3 border border-red-200">
                         <div className="flex justify-between items-center">
                           <div>
@@ -227,8 +262,8 @@ export default function MyRequests() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Array.isArray(requests) && requests.length > 0 ? (
-                requests.slice((page - 1) * pageSize, page * pageSize).map((request: any) => (
+              {safeRequests && safeRequests.length > 0 ? (
+                safeRequests.slice((page - 1) * pageSize, page * pageSize).map((request: any) => (
                   <div key={request.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -325,7 +360,7 @@ export default function MyRequests() {
               )}
 
               {/* Pagination Controls */}
-              {Array.isArray(requests) && requests.length > pageSize && (
+              {safeRequests && safeRequests.length > pageSize && (
                 <div className="mt-4 flex justify-center">
                   <Pagination>
                     <PaginationContent>
@@ -335,7 +370,7 @@ export default function MyRequests() {
                           aria-disabled={page === 1}
                         />
                       </PaginationItem>
-                      {[...Array(Math.ceil(requests.length / pageSize))].map((_, i) => (
+                      {[...Array(Math.ceil(safeRequests.length / pageSize))].map((_, i) => (
                         <PaginationItem key={i}>
                           <PaginationLink
                             isActive={page === i + 1}
@@ -347,8 +382,8 @@ export default function MyRequests() {
                       ))}
                       <PaginationItem>
                         <PaginationNext
-                          onClick={() => setPage(p => Math.min(Math.ceil(requests.length / pageSize), p + 1))}
-                          aria-disabled={page === Math.ceil(requests.length / pageSize)}
+                          onClick={() => setPage(p => Math.min(Math.ceil(safeRequests.length / pageSize), p + 1))}
+                          aria-disabled={page === Math.ceil(safeRequests.length / pageSize)}
                         />
                       </PaginationItem>
                     </PaginationContent>
@@ -444,12 +479,12 @@ export default function MyRequests() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4 flex items-center">
                     <Package className="h-5 w-5 mr-2 text-blue-600" />
-                    Line Items ({requestDetails?.lineItems?.length || 0})
+                    Line Items ({Array.isArray(safeRequestDetails.lineItems) && safeRequestDetails.lineItems.length || 0})
                   </h3>
                   
                   <div className="space-y-3">
-                    {requestDetails?.lineItems && requestDetails.lineItems.length > 0 ? (
-                      requestDetails.lineItems.map((item: any, index: number) => (
+                    {Array.isArray(safeRequestDetails.lineItems) && safeRequestDetails.lineItems.length > 0 ? (
+                      safeRequestDetails.lineItems.map((item: any, index: number) => (
                         <Card key={item.id} className="border-l-4 border-l-blue-500">
                           <CardContent className="p-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -491,6 +526,13 @@ export default function MyRequests() {
 
                 <Separator />
 
+                {/* Removed debug block as it's no longer needed */}
+                {/* <div style={{ background: '#ffe', color: '#a00', padding: 8, marginBottom: 8 }}>
+                  <div>DEBUG: selectedRequest.pr_number = {String(selectedRequest?.pr_number)}</div>
+                  <div>DEBUG: attachments = {JSON.stringify(attachments)}</div>
+                  <div>DEBUG: isLoadingAttachments = {String(isLoadingAttachments)}</div>
+                </div> */}
+
                 {/* Attachments */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4 flex items-center">
@@ -504,7 +546,7 @@ export default function MyRequests() {
                       {attachments.map((file: any) => (
                         <li key={file.id} className="flex items-center space-x-2">
                           <a
-                            href={`/${file.file_path}`}
+                            href={`/api/attachments/${file.id}/download`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 underline"
@@ -512,6 +554,14 @@ export default function MyRequests() {
                             {file.original_name}
                           </a>
                           <span className="text-xs text-gray-400">({(file.file_size / 1024).toFixed(1)} KB)</span>
+                          <button
+                            className="ml-2 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+                            onClick={() => {
+                              window.open(`/api/attachments/${file.id}/download`, '_blank');
+                            }}
+                          >
+                            Download
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -557,7 +607,7 @@ export default function MyRequests() {
                     <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
                     <ApprovalProgress request={selectedRequest} />
                     {/* Show Comments & Audit Log below approval progress only when viewing details */}
-                    <CommentsAuditLog purchaseRequestId={selectedRequest.id} />
+                    {(safeRequestDetails as any).id && <CommentsAuditLog purchaseRequestId={(safeRequestDetails as any).id} />}
                   </div>
                 )}
               </div>
@@ -569,12 +619,18 @@ export default function MyRequests() {
   );
 }
 
-export function ApprovalProgress({ request }) {
+export function ApprovalProgress({ request }: { request: any }) {
   const { data: workflow } = useQuery({
     queryKey: ["/api/approval-workflow", request.department, request.location],
+    queryFn: async () => {
+      // Simulate fetching workflow based on department and location
+      const res = await fetch(`/api/approval-workflow?department=${request.department}&location=${request.location}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch workflow');
+      return res.json();
+    },
     enabled: !!request,
   });
-  const maxLevel = workflow?.length || 2;
+  const maxLevel = workflow?.length || 2; // Default to 2 if workflow not loaded
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
@@ -591,9 +647,9 @@ export function ApprovalProgress({ request }) {
           style={{ width: `${(request.currentApprovalLevel / maxLevel) * 100}%` }}
         />
       </div>
-      {workflow && (
+      {Array.isArray(workflow) && (
         <div className="mt-2 space-y-1">
-          {workflow.map((level, idx) => (
+          {workflow.map((level: any, idx: number) => (
             <div key={level.approvalLevel} className="flex items-center text-sm">
               <span className="font-medium mr-2">Level {level.approvalLevel}:</span>
               <span>{level.approver.fullName} ({level.approver.email})</span>
@@ -620,9 +676,15 @@ export function ApprovalProgress({ request }) {
   );
 }
 
-function ApprovalAuditLog({ requestId }) {
+// This component is not used in MyRequests, but provided for completeness
+function ApprovalAuditLog({ requestId }: { requestId: any }) {
   const { data: history } = useQuery({
     queryKey: ["/api/approval-history", requestId],
+    queryFn: async () => {
+      const res = await fetch(`/api/approval-history?requestId=${requestId}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch approval history');
+      return res.json();
+    },
     enabled: !!requestId,
   });
   if (!history) return null;
@@ -633,7 +695,7 @@ function ApprovalAuditLog({ requestId }) {
         {history.length === 0 ? (
           <div className="text-gray-500">No actions yet.</div>
         ) : (
-          history.map((entry, idx) => (
+          history.map((entry: any, idx: number) => (
             <div key={idx} className="flex items-center justify-between border-b last:border-b-0 py-1">
               <span>{entry.action} by {entry.approver?.fullName || 'User'} (Level {entry.approvalLevel})</span>
               <span className="text-gray-500">{formatDate(entry.actionDate)}</span>
