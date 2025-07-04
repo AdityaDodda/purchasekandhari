@@ -43,6 +43,15 @@ export default function UserReports() {
     queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
     enabled: !!selectedRequest?.id,
   });
+  const { data: attachments = [], isLoading: isLoadingAttachments } = useQuery({
+    queryKey: [selectedRequest?.requisitionNumber, 'attachments'],
+    queryFn: async () => {
+      if (!selectedRequest?.requisitionNumber) return [];
+      const res = await fetch(`/api/purchase-requests/${selectedRequest.requisitionNumber}/attachments`, { credentials: 'include' });
+      return res.json();
+    },
+    enabled: !!selectedRequest?.requisitionNumber && showDetailsModal,
+  });
 
   useEffect(() => {
     async function fetchRequester() {
@@ -467,11 +476,11 @@ export default function UserReports() {
                     <Paperclip className="h-5 w-5 mr-2 text-blue-600" />
                     Attachments
                   </h3>
-                  {isLoadingDetails ? (
+                  {isLoadingAttachments ? (
                     <div className="text-gray-500">Loading attachments...</div>
-                  ) : requestDetails?.attachments && requestDetails.attachments.length > 0 ? (
+                  ) : attachments.length > 0 ? (
                     <ul className="space-y-2">
-                      {requestDetails.attachments.map((file: any) => (
+                      {attachments.map((file: any) => (
                         <li key={file.id} className="flex items-center space-x-2">
                           <a
                             href={`/${file.file_path}`}

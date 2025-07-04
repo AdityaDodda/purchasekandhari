@@ -54,14 +54,15 @@ export function AuditLog({ purchaseRequestId, createdAt, requester }: AuditLogPr
         <AccordionTrigger>Audit History</AccordionTrigger>
         <AccordionContent>
           <Card className="mt-2">
-            <CardContent>
+            <CardContent className="p-4">
               {isLoading ? (
                 <div>Loading...</div>
               ) : fullLog.length === 0 ? (
                 <div className="text-gray-500">No audit log yet.</div>
               ) : (
-                fullLog.map((h: any) => (
-                  <div key={h.id} className="mb-3">
+                <div className="flex flex-col gap-y-3">
+                  {fullLog.map((h: any) => (
+                    <div key={h.id}>
                     <div>
                       <span className="font-medium">
                         {h.users?.name || h.users?.fullName || h.users?.username || h.users?.emp_code || (h.action === 'submitted' ? 'User' : 'Approver')}
@@ -74,7 +75,8 @@ export function AuditLog({ purchaseRequestId, createdAt, requester }: AuditLogPr
                       )}
                     </div>
                   </div>
-                ))
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

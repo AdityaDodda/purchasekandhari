@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Download, Filter, TrendingUp, Clock, DollarSign, BarChart3, Package, Calendar, MapPin, Database, Paperclip } from "lucide-react";
+import { Search, Download, Filter, TrendingUp, Clock, DollarSign, BarChart3, Package, Calendar, MapPin, Database, Paperclip, FileText, Users, Building } from "lucide-react";
 import qs from "query-string";
 import * as XLSX from 'xlsx';
 import { Navbar } from "@/components/layout/navbar";
@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {Pagination,PaginationContent,PaginationItem,PaginationLink,PaginationPrevious,PaginationNext,} from "@/components/ui/pagination";
+import { ApprovalProgress } from "@/components/ui/approval-progress";
 
 // Added the exportToXLSX utility function outside the component
 function exportToXLSX(data: any[], filename: string) {
@@ -73,6 +74,9 @@ export default function AdminDashboard() {
   });
   const { data: locations } = useQuery<string[]>({
     queryKey: ["/api/admin/reports/locations"],
+  });
+  const { data: users } = useQuery({
+    queryKey: ["/api/admin/users"],
   });
 
   // Create a clean set of active filters for the API call.
@@ -156,17 +160,23 @@ export default function AdminDashboard() {
       return;
     }
 
-    const formattedData = dataToExport.map(req => ({
+    const formattedData = dataToExport.map(req => {
+      const r = req.requester;
+      const requesterId = r?.id || r?.emp_code || req.requesterId || r;
+      const user = Array.isArray(users) && users.find(
+        (u: any) => u.id === requesterId || u.emp_code === requesterId
+      );
+      return {
+        "Title": req.title,
       "Requisition Number": req.requisitionNumber,
-      "Title": req.title,
-      "Status": req.status,
-      "Total Cost": req.totalEstimatedCost,
-      "Requester Name": req.requester?.fullName,
-      "Requester Employee #": req.requester?.employeeNumber,
+        "Request Date": formatDate(req.requestDate),
+        "Requester": user?.fullName || user?.name || r?.fullName || r?.name || r?.emp_code || req.requesterId || r || '',
       "Department": req.department,
       "Location": req.location,
-      "Request Date": formatDate(req.requestDate),
-    }));
+        "Value": formatCurrency(req.totalEstimatedCost),
+        "Status": req.status,
+      };
+    });
 
     const date = new Date().toISOString().split('T')[0];
     const filename = `purchase-requests-${date}.xlsx`;
@@ -189,8 +199,8 @@ export default function AdminDashboard() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async ({ id, comments }: { id: number; comments?: string }) => {
-      return apiRequest("POST", `/api/purchase-requests/${id}/reject`, { comments });
+    mutationFn: async ({ id, comment }: { id: number; comment?: string }) => {
+      return apiRequest("POST", `/api/purchase-requests/${id}/reject`, { comment });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
@@ -202,8 +212,8 @@ export default function AdminDashboard() {
   });
 
   const returnMutation = useMutation({
-    mutationFn: async ({ id, comments }: { id: number; comments?: string }) => {
-      return apiRequest("POST", `/api/purchase-requests/${id}/return`, { comments });
+    mutationFn: async ({ id, comment }: { id: number; comment?: string }) => {
+      return apiRequest("POST", `/api/purchase-requests/${id}/return`, { comment });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
@@ -220,16 +230,16 @@ export default function AdminDashboard() {
   };
 
   const handleRejectRequest = (id: number) => {
-    const comments = prompt("Enter rejection reason:");
-    if (comments) {
-      rejectMutation.mutate({ id, comments });
+    const comment = prompt("Enter rejection reason:");
+    if (comment) {
+      rejectMutation.mutate({ id, comment });
     }
   };
 
   const handleReturnRequest = (id: number) => {
-    const comments = prompt("Enter return comments (required for user to understand what needs to be changed):");
-    if (comments) {
-      returnMutation.mutate({ id, comments });
+    const comment = prompt("Enter return comments (required for user to understand what needs to be changed):");
+    if (comment) {
+      returnMutation.mutate({ id, comment });
     }
   };
 
@@ -292,10 +302,9 @@ export default function AdminDashboard() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Departments</SelectItem>
-                    <SelectItem value="Production">Production</SelectItem>
-                    <SelectItem value="Quality Control">Quality Control</SelectItem>
-                    <SelectItem value="Sales & Marketing">Sales & Marketing</SelectItem>
-                    <SelectItem value="Finance">Finance</SelectItem>
+                    {Array.isArray(departments) && departments.map((dept: any) => (
+                      <SelectItem key={dept.dept_number || dept.id || dept.value} value={dept.dept_name || dept.value}>{dept.dept_name || dept.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -308,10 +317,9 @@ export default function AdminDashboard() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Locations</SelectItem>
-                    <SelectItem value="Mumbai">Mumbai</SelectItem>
-                    <SelectItem value="Delhi">Delhi</SelectItem>
-                    <SelectItem value="Bangalore">Bangalore</SelectItem>
-                    <SelectItem value="Chennai">Chennai</SelectItem>
+                    {Array.isArray(locations) && locations.map((loc: string) => (
+                      <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -408,21 +416,14 @@ export default function AdminDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="w-8 h-8 bg-[hsl(207,90%,54%)] rounded-full flex items-center justify-center mr-3">
-                              <span className="text-white text-xs font-semibold">
-                                {request.requester?.fullName?.charAt(0) || 'U'}
-                              </span>
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {request.requester?.fullName || 'Unknown'}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {request.requester?.employeeNumber || 'N/A'}
-                              </div>
-                            </div>
-                          </div>
+                          {(() => {
+                            const r = request.requester;
+                            const requesterId = r?.id || r?.emp_code || request.requesterId || r;
+                            const user = Array.isArray(users) && users.find(
+                              (u: any) => u.id === requesterId || u.emp_code === requesterId
+                            );
+                            return user?.fullName || user?.name || r?.fullName || r?.name || r?.emp_code || request.requesterId || r || '';
+                          })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{request.department}</div>
@@ -432,12 +433,20 @@ export default function AdminDashboard() {
                           {formatCurrency(request.totalEstimatedCost)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <StatusBadge status={request.status} />
+                          <StatusBadge
+                            status={request.status}
+                            daysPending={request.status === 'pending'
+                              ? Math.floor((Date.now() - new Date(request.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+                              : undefined}
+                            approverLevel={request.status === 'pending' ? request.currentApprovalLevel : undefined}
+                          />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <div className="flex space-x-2">
-                            {/* <Button variant="ghost" size="sm" className="text-[hsl(207,90%,54%)]"
-                            onClick={() => handleViewDetails(request)}>View</Button> */}
+                            <Button variant="ghost" size="sm" className="text-[hsl(207,90%,54%)]"
+                              onClick={() => handleViewDetails(request)}>
+                              View
+                            </Button>
                             <Button variant="ghost" size="sm" className="text-green-600" 
                             onClick={() => handleApproveRequest(request.id)}
                             disabled={request.status === 'approved' || request.status === 'rejected' || request.status === 'returned'}>Approve</Button>
@@ -505,22 +514,109 @@ export default function AdminDashboard() {
 
         {/* Detailed View Modal */}
         <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          <DialogContent>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Request Details</DialogTitle>
+              <div className="flex justify-between items-start">
+                <div>
+                  <DialogTitle className="text-xl font-bold">
+                    {selectedRequest?.title}
+                  </DialogTitle>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedRequest?.requisitionNumber}
+                  </p>
+                </div>
+                <StatusBadge
+                  status={selectedRequest?.status}
+                  className="mr-4"
+                  daysPending={selectedRequest?.status === 'pending'
+                    ? Math.floor((Date.now() - new Date(selectedRequest?.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+                    : undefined}
+                  approverLevel={selectedRequest?.status === 'pending' ? selectedRequest?.currentApprovalLevel : undefined}
+                />
+              </div>
             </DialogHeader>
+
+            {isLoadingDetails ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-pulse space-y-4 w-full">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-32 bg-gray-200 rounded"></div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Request Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center">
+                        <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                        Request Details
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center text-sm">
+                        <Calendar className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="text-gray-500">Submitted:</span>
+                        <span className="ml-2 font-medium">
+                          {selectedRequest && formatDate(selectedRequest.requestDate)}
+                        </span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <Users className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="text-gray-500">Requester:</span>
+                        <span className="ml-2 font-medium">{(() => {
+                          const r = selectedRequest?.requester;
+                          const requesterId = r?.id || r?.emp_code || selectedRequest?.requesterId || r;
+                          const user = Array.isArray(users) && users.find(
+                            (u: any) => u.id === requesterId || u.emp_code === requesterId
+                          );
+                          return user?.fullName || user?.name || r?.fullName || r?.name || r?.emp_code || selectedRequest?.requesterId || r || '';
+                        })()}</span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <Building className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="text-gray-500">Department:</span>
+                        <span className="ml-2 font-medium">{selectedRequest?.department}</span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <MapPin className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="text-gray-500">Location:</span>
+                        <span className="ml-2 font-medium">{selectedRequest?.location}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Business Justification</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <Badge variant="outline">{selectedRequest?.businessJustificationCode}</Badge>
+                        <p className="text-sm text-gray-700">
+                          {selectedRequest?.businessJustificationDetails}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Separator />
+
+                {/* Line Items */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
-              {/* <ApprovalProgress request={selectedRequest} />  // Assuming this component exists */}
-              {/* Show Comments & Audit Log below approval progress only when viewing details */}
-              {selectedRequest?.id && (
-                <>
-                  <Comments purchaseRequestId={selectedRequest.id} />
-                  <AuditLog purchaseRequestId={selectedRequest.id} />
-                </>
-              )}
+                  <LineItemsGrid
+                    items={typeof requestDetails === 'object' && requestDetails !== null && 'lineItems' in requestDetails && Array.isArray((requestDetails as any).lineItems) ? (requestDetails as any).lineItems : []}
+                    onItemsChange={() => {}}
+                    editable={false}
+                  />
             </div>
+
             <Separator />
+
+                {/* Attachments */}
             <div>
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <Paperclip className="h-5 w-5 mr-2 text-blue-600" />
@@ -556,6 +652,34 @@ export default function AdminDashboard() {
                 <div className="text-gray-500">No attachments uploaded for this request.</div>
               )}
             </div>
+
+                <Separator />
+
+                {selectedRequest && (
+                  <div>
+                    {selectedRequest.id && (
+                      <>
+                        <Comments purchaseRequestId={selectedRequest.id} />
+                        <AuditLog 
+                          purchaseRequestId={selectedRequest.id}
+                          requester={(() => {
+                            const r = selectedRequest?.requester;
+                            const requesterId = r?.id || r?.emp_code || selectedRequest?.requesterId || r;
+                            const user = Array.isArray(users) && users.find(
+                              (u: any) => u.id === requesterId || u.emp_code === requesterId
+                            );
+                            return user || r || null;
+                          })()}
+                          createdAt={selectedRequest?.createdAt}
+                        />
+                      </>
+                    )}
+                    <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
+                    <ApprovalProgress request={typeof requestDetails === 'object' && requestDetails !== null && Object.keys(requestDetails).length > 0 ? requestDetails : selectedRequest} />
+                  </div>
+                )}
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

@@ -347,7 +347,7 @@ export default function Dashboard() {
                     {selectedRequest?.requisitionNumber}
                   </p>
                 </div>
-                <StatusBadge status={selectedRequest?.status} />
+                <StatusBadge status={selectedRequest?.status} className="mr-4" />
               </div>
             </DialogHeader>
 

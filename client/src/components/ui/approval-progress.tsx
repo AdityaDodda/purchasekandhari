@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { CheckCircle, Circle, XCircle } from "lucide-react";
 
 interface PurchaseRequest {
   id: string;
@@ -17,58 +18,66 @@ export function ApprovalProgress({ request }: { request: PurchaseRequest }) {
     queryKey: ["/api/approval-workflow", request.department, request.location],
     enabled: !!request,
   });
-  // Calculate display level for progress bar
-  let displayLevel = 0;
+
+  // Determine stage status
+  // 0: not started, 1: approved, 2: rejected, 3: current
+  let stages: Array<'approved' | 'pending' | 'rejected' | 'blank'> = ['pending', 'pending', 'pending'];
   if (request.status === 'approved') {
-    displayLevel = 3;
-  } else if (request.currentApprovalLevel === 3) {
-    displayLevel = 2;
-  } else if (request.currentApprovalLevel === 2) {
-    displayLevel = 1;
-  } else if (request.currentApprovalLevel === 1) {
-    displayLevel = 0;
+    stages = ['approved', 'approved', 'approved'];
+  } else if (request.status === 'rejected') {
+    // Mark up to currentApprovalLevel-1 as approved, current as rejected, rest blank
+    for (let i = 0; i < 3; i++) {
+      if (i < (request.currentApprovalLevel ?? 1) - 1) {
+        stages[i] = 'approved';
+      } else if (i === (request.currentApprovalLevel ?? 1) - 1) {
+        stages[i] = 'rejected';
+      } else {
+        stages[i] = 'blank';
+      }
+    }
+  } else if (request.status === 'returned') {
+    stages = ['blank', 'blank', 'blank'];
+  } else {
+    // Pending: mark up to currentApprovalLevel-1 as approved, current as pending, rest as pending
+    for (let i = 0; i < 3; i++) {
+      if (i < (request.currentApprovalLevel ?? 1) - 1) {
+        stages[i] = 'approved';
+      } else if (i === (request.currentApprovalLevel ?? 1) - 1) {
+        stages[i] = 'pending';
+      } else {
+        stages[i] = 'pending';
+      }
+    }
   }
-  // If the request is rejected, keep percent at the last stage reached (optional: could set to 0 or a special value)
+
   return (
     <div className="space-y-2">
-      <div className="flex justify-between items-center">
-        <span className="text-sm font-medium text-gray-700">
-          Level {displayLevel} of 3
-        </span>
-        <span className="text-sm text-gray-500">
-          {((displayLevel / 3) * 100).toFixed(2)}% Complete
-        </span>
-      </div>
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div
-          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-          style={{ width: `${((displayLevel / 3) * 100).toFixed(2)}%` }}
-        />
-      </div>
-      {Array.isArray(workflow) && (
-        <div className="mt-2 space-y-1">
-          {workflow.map((level: any, idx: number) => (
-            <div key={level.approvalLevel} className="flex items-center text-sm">
-              <span className="font-medium mr-2">Level {level.approvalLevel}:</span>
-              <span>{level.approver.fullName} ({level.approver.email})</span>
-              {request.currentApprovalLevel === level.approvalLevel && request.status === 'pending' && (
-                <span className="ml-2 text-blue-600">(Current)</span>
-              )}
-              {request.currentApprovalLevel > level.approvalLevel && (
-                <span className="ml-2 text-green-600">(Approved)</span>
-              )}
+      <div className="flex flex-col items-center mt-2">
+        <div className="flex items-center justify-center gap-x-4">
+          {stages.map((status, idx) => (
+            <div key={idx} className="flex flex-col items-center">
+              <div className="flex items-center">
+                {status === 'approved' && <CheckCircle className="h-8 w-8 text-green-500" />}
+                {status === 'pending' && <Circle className="h-8 w-8 text-gray-400" />}
+                {status === 'rejected' && <XCircle className="h-8 w-8 text-red-500" />}
+                {status === 'blank' && <Circle className="h-8 w-8 text-gray-200" />}
+                {idx < 2 && (
+                  <div className={`h-1 w-8 ${status === 'approved' && stages[idx+1] === 'approved' ? 'bg-green-500' : status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'} mx-1 rounded-full`} />
+                )}
+              </div>
+              <span className="text-xs text-gray-500 mt-1">Level {idx + 1}</span>
             </div>
           ))}
         </div>
-      )}
-      <p className="text-xs text-gray-500 mt-2">
-        {displayLevel === 3
+      </div>
+      <p className="text-xs text-gray-500 mt-2 text-center">
+        {request.status === 'approved'
           ? "Request approved - Procurement in progress"
           : request.status === "rejected"
           ? "Request has been rejected"
-          : request.status === "pending"
-          ? "Awaiting approval from next level"
-          : "Under review"}
+          : request.status === "returned"
+          ? "Request has been returned"
+          : "Awaiting approval from next level"}
       </p>
     </div>
   );

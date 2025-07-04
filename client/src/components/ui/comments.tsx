@@ -24,7 +24,7 @@ export function Comments({ purchaseRequestId, canComment = true }: CommentsProps
   const comments = Array.isArray(history)
     ? (history as any[]).filter(
         (h) => h.comment && h.comment.trim() !== ""
-      )
+      ).reverse()
     : [];
 
   return (
@@ -33,23 +33,25 @@ export function Comments({ purchaseRequestId, canComment = true }: CommentsProps
         <AccordionTrigger>Comments History</AccordionTrigger>
         <AccordionContent>
           <Card className="mt-2">
-            <CardContent>
+            <CardContent className="p-4">
               {isLoading ? (
                 <div>Loading...</div>
               ) : comments.length === 0 ? (
                 <div className="text-gray-500">No comments yet.</div>
               ) : (
-                (comments as any[]).map((c) => (
-                  <div key={c.id} className="mb-4">
-                    <div className="font-medium">
-                      {c.users?.name || "Approver"}
+                <div className="flex flex-col gap-y-4">
+                  {(comments as any[]).map((c) => (
+                    <div key={c.id}>
+                      <div className="font-medium">
+                        {c.users?.name || "Approver"}
+                      </div>
+                      <div className="text-xs text-gray-500 mb-1">
+                        {c.action} on {c.acted_at ? formatDate(c.acted_at) : ""}
+                      </div>
+                      <div className="bg-gray-50 border rounded p-2">{c.comment}</div>
                     </div>
-                    <div className="text-xs text-gray-500 mb-1">
-                      {c.action} on {c.acted_at ? formatDate(c.acted_at) : ""}
-                    </div>
-                    <div className="bg-gray-50 border rounded p-2">{c.comment}</div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
