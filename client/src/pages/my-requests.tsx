@@ -324,16 +324,6 @@ export default function MyRequests() {
                         >
                           View Details
                         </Button>
-                        {request.status === 'returned' && request.requesterId === user?.id && (
-                          <Button variant="ghost" size="sm" className="text-orange-600" onClick={() => handleEditResubmit(request)}>
-                            Edit & Resubmit
-                          </Button>
-                        )}
-                        {request.status !== 'returned' && (
-                          <Button variant="ghost" size="sm">
-                            Edit
-                          </Button>
-                        )}
                         <Button variant="ghost" size="sm" className="text-red-500">
                           Cancel
                         </Button>

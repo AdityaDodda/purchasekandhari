@@ -147,6 +147,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
     if (!initialData && user) {
       setValue("department", user.department || "");
       setValue("location", user.location || "");
+      setValue("entity", user.entity || "");
     }
   }, [user, initialData, setValue]);
 
@@ -363,7 +364,11 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
           <CardContent className="p-6">
             <LineItemsGrid 
               items={lineItems} 
-              onItemsChange={setLineItems}
+              onItemsChange={items => setLineItems(items.map(item => ({
+                ...item,
+                requiredQuantity: Number(item.requiredQuantity),
+                estimatedCost: Number(item.estimatedCost),
+              })))}
               editable={true}
             />
 

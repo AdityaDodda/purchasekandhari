@@ -694,6 +694,7 @@ export class DatabaseStorage implements IStorage {
             vendors: true,
           },
         },
+        users_purchase_requests_created_byTousers: true,
       },
     });
   }

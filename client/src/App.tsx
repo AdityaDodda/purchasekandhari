@@ -16,6 +16,7 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AdminReports from "@/pages/admin-reports";
 import UserReports from "@/pages/user-reports";
+import EditRequest from "@/pages/edit-request";
 
 function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useQuery({
@@ -58,6 +59,7 @@ function Router() {
           {/* Route based on user role */}
           <Route path="/" component={user?.role === "admin" ? AdminDashboard : Dashboard} />
           <Route path="/new-request" component={NewRequest} />
+          <Route path="/edit-request/:id" component={EditRequest}/>
           {/* Reports routing by role */}
           {user?.role === "admin" ? (
             <Route path="/reports" component={AdminReports} />

@@ -400,6 +400,7 @@ export function registerRoutes(app: Express): Server {
         requestDate: reqData.request_date,
         department: reqData.department,
         location: reqData.location,
+        entity: reqData.users_purchase_requests_created_byTousers?.entity,
         businessJustificationCode: reqData.business_justification_code,
         businessJustificationDetails: reqData.business_justification_details,
         status: reqData.status,
@@ -437,6 +438,29 @@ export function registerRoutes(app: Express): Server {
       if (!pr) return res.status(404).json({ message: "Purchase request not found" });
       // If resubmitting from 'returned', reset approval flow
       let updateData = req.body;
+      if ('entity' in updateData) {
+        delete updateData.entity;
+      }
+      // Map camelCase to snake_case
+      const fieldMap = {
+        requestDate: 'request_date',
+        businessJustificationCode: 'business_justification_code',
+        businessJustificationDetails: 'business_justification_details',
+        totalEstimatedCost: 'total_estimated_cost',
+        currentApprovalLevel: 'current_approval_level',
+        currentApproverId: 'current_approver_emp_code',
+        requesterId: 'requester_emp_code',
+      };
+      for (const [camel, snake] of Object.entries(fieldMap)) {
+        if (camel in updateData) {
+          updateData[snake] = updateData[camel];
+          delete updateData[camel];
+        }
+      }
+      // Convert request_date to Date if needed
+      if (updateData.request_date && typeof updateData.request_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(updateData.request_date)) {
+        updateData.request_date = new Date(updateData.request_date);
+      }
       if (pr.status === 'returned') {
         // Get approval matrix for requester
         const approvalMatrixList = await storage.getAllApprovalMatrix();

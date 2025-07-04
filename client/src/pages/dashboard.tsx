@@ -276,17 +276,13 @@ export default function Dashboard() {
                               >
                                 View
                               </Button>
-                              {request.status === 'returned' && (
+                              {request.status === 'returned' && request.requesterId === user?.id && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="text-orange-600"
+                                  onClick={() => setLocation(`/edit-request/${request.id}`)}
                                 >
-                                  Resubmit
-                                </Button>
-                              )}
-                              {(request.status === 'submitted' || request.status === 'returned') && (
-                                <Button variant="ghost" size="sm">
                                   Edit
                                 </Button>
                               )}
