@@ -739,7 +739,7 @@ export function registerRoutes(app: Express): Server {
         await storage.createAuditLog({
           pr_number: prNumber,
           approver_emp_code: user.emp_code,
-          approval_level: 0,
+          approval_level: currentLevel,
           action: "rejected",
           comment,
         });
@@ -788,7 +788,7 @@ export function registerRoutes(app: Express): Server {
         await storage.createAuditLog({
           pr_number: prNumber,
           approver_emp_code: user.emp_code,
-          approval_level: 0,
+          approval_level: currentLevel,
           action: "returned",
           comment,
         });
@@ -956,6 +956,17 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Get audit logs error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get user by emp_code
+  app.get('/api/users/:emp_code', async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.emp_code);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch user' });
     }
   });
 

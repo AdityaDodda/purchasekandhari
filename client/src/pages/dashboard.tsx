@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/pagination";
 import { Comments } from "@/components/ui/comments";
 import { AuditLog } from "@/components/ui/audit-log";
+import { ApprovalProgress } from "@/components/ui/approval-progress";
 
 type User = {
   id: string;
@@ -55,6 +56,7 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState<'my' | 'approver' | 'pending' | 'all'>('my');
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const [selectedRequester, setSelectedRequester] = useState<any>(null);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
@@ -94,6 +96,24 @@ export default function Dashboard() {
   useEffect(() => {
     setPage(1);
   }, [requests]);
+
+  // Fetch requester user info when selectedRequest changes
+  useEffect(() => {
+    async function fetchRequester() {
+      if (selectedRequest?.requesterId) {
+        const res = await fetch(`/api/users/${selectedRequest.requesterId}`, { credentials: 'include' });
+        if (res.ok) {
+          const user = await res.json();
+          setSelectedRequester(user);
+        } else {
+          setSelectedRequester(null);
+        }
+      } else {
+        setSelectedRequester(null);
+      }
+    }
+    fetchRequester();
+  }, [selectedRequest]);
 
   const handleViewDetails = (request: any) => {
     setSelectedRequest(request);
@@ -235,7 +255,13 @@ export default function Dashboard() {
                             {request.department}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <StatusBadge status={request.status} />
+                            <StatusBadge
+                              status={request.status}
+                              daysPending={request.status === 'pending'
+                                ? Math.floor((Date.now() - new Date(request.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+                                : undefined}
+                              approverLevel={request.status === 'pending' ? request.currentApprovalLevel : undefined}
+                            />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatDate(request.requestDate)}
@@ -450,7 +476,11 @@ export default function Dashboard() {
                 {selectedRequest?.id && (
                   <>
                     <Comments purchaseRequestId={selectedRequest.id} />
-                    <AuditLog purchaseRequestId={selectedRequest.id} />
+                    <AuditLog 
+                      purchaseRequestId={selectedRequest.id}
+                      createdAt={selectedRequest.createdAt}
+                      requester={selectedRequester}
+                    />
                   </>
                 )}
 
@@ -552,68 +582,6 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
       </div>
-    </div>
-  );
-}
-
-function ApprovalProgress({ request }: { request: PurchaseRequest }) {
-  const { data: workflow } = useQuery({
-    queryKey: ["/api/approval-workflow", request.department, request.location],
-    enabled: !!request,
-  });
-  // Calculate display level for progress bar
-  let displayLevel = 0;
-  if (request.status === 'approved') {
-    displayLevel = 3;
-  } else if (request.currentApprovalLevel === 3) {
-    displayLevel = 2;
-  } else if (request.currentApprovalLevel === 2) {
-    displayLevel = 1;
-  } else if (request.currentApprovalLevel === 1) {
-    displayLevel = 0;
-  }
-  // If the request is rejected, keep percent at the last stage reached (optional: could set to 0 or a special value)
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center">
-        <span className="text-sm font-medium text-gray-700">
-          Level {displayLevel} of 3
-        </span>
-        <span className="text-sm text-gray-500">
-          {((displayLevel / 3) * 100).toFixed(2)}% Complete
-        </span>
-      </div>
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div
-          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-          style={{ width: `${((displayLevel / 3) * 100).toFixed(2)}%` }}
-        />
-      </div>
-      {Array.isArray(workflow) && (
-        <div className="mt-2 space-y-1">
-          {workflow.map((level: any, idx: number) => (
-            <div key={level.approvalLevel} className="flex items-center text-sm">
-              <span className="font-medium mr-2">Level {level.approvalLevel}:</span>
-              <span>{level.approver.fullName} ({level.approver.email})</span>
-              {request.currentApprovalLevel === level.approvalLevel && request.status === 'pending' && (
-                <span className="ml-2 text-blue-600">(Current)</span>
-              )}
-              {request.currentApprovalLevel > level.approvalLevel && (
-                <span className="ml-2 text-green-600">(Approved)</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-gray-500 mt-2">
-        {displayLevel === 3
-          ? "Request approved - Procurement in progress"
-          : request.status === "rejected"
-          ? "Request has been rejected"
-          : request.status === "pending"
-          ? "Awaiting approval from next level"
-          : "Under review"}
-      </p>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 export default function EditRequest() {
   const { id } = useParams();
@@ -76,6 +78,49 @@ export default function EditRequest() {
                 placeholder="Explain what you changed or why you are resubmitting"
                 required
               />
+            </CardContent>
+          </Card>
+        )}
+        {/* Review & Edit Section */}
+        {initialData?.status === "returned" && currentStep === 4 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-lg">Review & Submit</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Request Details Summary */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-semibold">Request Details</div>
+                    <div className="text-sm text-gray-600">{initialData.title}</div>
+                  </div>
+                  <Button variant="outline" onClick={() => setCurrentStep(1)}>Edit</Button>
+                </div>
+                <Separator />
+                {/* Line Items Summary */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-semibold">Line Items</div>
+                    <div className="text-sm text-gray-600">{initialData.lineItems?.length || 0} items</div>
+                  </div>
+                  <Button variant="outline" onClick={() => setCurrentStep(2)}>Edit</Button>
+                </div>
+                <Separator />
+                {/* Attachments Summary */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-semibold">Attachments</div>
+                    <div className="text-sm text-gray-600">{initialData.attachments?.length || 0} files</div>
+                  </div>
+                  <Button variant="outline" onClick={() => setCurrentStep(3)}>Edit</Button>
+                </div>
+                <Separator />
+                {/* Submit Button */}
+                <div className="flex justify-end">
+                  <Button className="bg-green-600 text-white" onClick={() => setCurrentStep(4)}>Submit for Approval</Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

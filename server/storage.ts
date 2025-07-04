@@ -380,11 +380,9 @@ export class DatabaseStorage implements IStorage {
       updatedAt: req.updated_at,
       lineItems: req.line_items,
       approvalMatrix: matrixMap[req.requester_emp_code],
-      // Add more fields as needed
     }));
   }
   async updatePurchaseRequest(id: string, request: Partial<InsertPurchaseRequest>): Promise<PurchaseRequest> {
-    // Implement update logic for purchase_requests
     return this.prisma.purchase_requests.update({
       where: { pr_number: id },
       data: request,
@@ -465,8 +463,7 @@ export class DatabaseStorage implements IStorage {
     throw new Error("Method not implemented.");
   }
 
-// MASTER DATA IMPLEMENTATIONS (UPDATED FOR PAGINATION/SEARCH)
-
+// MASTER DATA IMPLEMENTATIONS
   // Users Master
   async getAllUsers(search?: string): Promise<User[]> {
     const where: Prisma.usersWhereInput = search
@@ -620,7 +617,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // Vendor Master - FULLY IMPLEMENTED
+  // Vendor Master
   async getAllVendors(search?: string): Promise<Vendor[]> {
     const where: Prisma.vendorsWhereInput = search
       ? {
@@ -648,14 +645,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateVendor(vendorAccountNumber: string, vendorData: UpdateVendor): Promise<Vendor> {
     return this.prisma.vendors.update({
-      where: { vendoraccountnumber: vendorAccountNumber }, // Primary key is vendoraccountnumber (string)
+      where: { vendoraccountnumber: vendorAccountNumber },
       data: vendorData,
     });
   }
 
   async deleteVendor(vendorAccountNumber: string): Promise<void> {
     await this.prisma.vendors.delete({
-      where: { vendoraccountnumber: vendorAccountNumber }, // Primary key is vendoraccountnumber (string)
+      where: { vendoraccountnumber: vendorAccountNumber },
     });
   }
 
@@ -665,8 +662,6 @@ export class DatabaseStorage implements IStorage {
       ? {
           OR: [
             { Site_Name: { contains: search, mode: 'insensitive' } },
-            // Add other searchable fields from the 'sites' table here if needed
-            // e.g., { city: { contains: search, mode: 'insensitive' } },
           ],
         }
       : {};

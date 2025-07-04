@@ -14,7 +14,7 @@ export function Navbar() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({ queryKey: ["/api/auth/user"] });
+  const { data: user } = useQuery<any>({ queryKey: ["/api/auth/user"] });
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/logout");
@@ -83,18 +83,14 @@ export function Navbar() {
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    className="flex items-center space-x-2 text-white hover:text-[hsl(32,100%,50%)] hover:bg-white/10 transition-colors duration-200 whitespace-nowrap"
+                  <div
+                    className="w-8 h-8 bg-[hsl(32,100%,50%)] rounded-full flex items-center justify-center flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    tabIndex={0}
                   >
-                    <div className="w-8 h-8 bg-[hsl(32,100%,50%)] rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-semibold text-sm">
-                        {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
-                      </span>
-                    </div>
-                    <span className="hidden md:inline truncate max-w-[120px]">{user?.name ?? 'User'}</span>
-                    <ChevronDown className="h-4 w-4 text-white flex-shrink-0" />
-                  </Button>
+                    <span className="text-white font-semibold text-sm">
+                      {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
+                    </span>
+                  </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent 
                   align="end" 
@@ -103,16 +99,16 @@ export function Navbar() {
                   alignOffset={-5}
                 >
                   <div className="px-2 py-1.5 text-sm">
-                    <div className="font-medium truncate">{user?.fullName ?? 'User'}</div>
+                    <div className="font-medium truncate">{user?.fullName ?? user?.name ?? 'User'}</div>
                     <div className="text-gray-500 truncate">{user?.email ?? 'No email'}</div>
-                    <div className="text-gray-500 text-xs">{user?.employeeNumber ?? 'N/A'}</div>
+                    <div className="text-gray-500 text-xs">{user?.employeeNumber ?? user?.emp_code ?? 'N/A'}</div>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  {/* <DropdownMenuItem>
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuSeparator /> */}
                   <DropdownMenuItem onClick={handleLogout} disabled={logoutMutation.isPending}>
                     <LogOut className="mr-2 h-4 w-4" />
                     {logoutMutation.isPending ? "Logging out..." : "Logout"}

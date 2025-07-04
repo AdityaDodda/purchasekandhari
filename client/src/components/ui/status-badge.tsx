@@ -4,9 +4,11 @@ import { cn } from "@/lib/utils";
 interface StatusBadgeProps {
   status: string;
   className?: string;
+  daysPending?: number;
+  approverLevel?: number;
 }
 
-export function StatusBadge({ status, className }: StatusBadgeProps) {
+export function StatusBadge({ status, className, daysPending, approverLevel }: StatusBadgeProps) {
   const getStatusStyles = (status: string) => {
     switch (status.toLowerCase()) {
       case "submitted":
@@ -33,6 +35,11 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <Badge className={cn(getStatusStyles(status), className)}>
       {formatStatus(status)}
+      {(typeof daysPending === 'number' && typeof approverLevel === 'number') && (
+        <span className="ml-2 text-[10px] font-normal">
+          | {daysPending} days | Level {approverLevel}
+        </span>
+      )}
     </Badge>
   );
 }

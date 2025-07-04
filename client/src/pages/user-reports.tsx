@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Download, Filter, Calendar, FileText, Eye, Users, Building, MapPin } from "lucide-react";
+import { Search, Download, Filter, Calendar, FileText, Eye, Users, Building, MapPin, Paperclip } from "lucide-react";
 import * as XLSX from 'xlsx';
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Navbar } from "@/components/layout/navbar";
@@ -14,11 +14,12 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { REQUEST_STATUSES } from "@/lib/constants";
 import { Calendar as UiCalendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { ApprovalProgress } from "./my-requests";
+import { ApprovalProgress } from "@/components/ui/approval-progress";
 import { Comments } from "@/components/ui/comments";
 import { AuditLog } from "@/components/ui/audit-log";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { LineItemsGrid } from "@/components/ui/line-items-grid";
 
 export default function UserReports() {
   const [filters, setFilters] = useState({
@@ -33,14 +34,32 @@ export default function UserReports() {
   const pageSize = 10;
   const [calendarOpenStart, setCalendarOpenStart] = useState(false);
   const [calendarOpenEnd, setCalendarOpenEnd] = useState(false);
+  const [selectedRequester, setSelectedRequester] = useState<any>(null);
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["/api/reports/purchase-requests", filters],
   });
   const { data: requestDetails, isLoading: isLoadingDetails } = useQuery<any>({
-    queryKey: ["/api/purchase-requests", selectedRequest?.id, "details"],
+    queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
     enabled: !!selectedRequest?.id,
   });
+
+  useEffect(() => {
+    async function fetchRequester() {
+      if (selectedRequest?.requesterId) {
+        const res = await fetch(`/api/users/${selectedRequest.requesterId}`, { credentials: 'include' });
+        if (res.ok) {
+          const user = await res.json();
+          setSelectedRequester(user);
+        } else {
+          setSelectedRequester(null);
+        }
+      } else {
+        setSelectedRequester(null);
+      }
+    }
+    fetchRequester();
+  }, [selectedRequest]);
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -61,7 +80,8 @@ export default function UserReports() {
     const simplifiedData = filteredRequests.map(req => ({
       RequisitionNumber: req.requisitionNumber,
       Title: req.title,
-      Amount: req.totalEstimatedCost,
+      Department: req.department,
+      Location: req.location,
       Status: req.status,
       RequestDate: formatDate(req.requestDate),
     }));
@@ -80,15 +100,17 @@ export default function UserReports() {
         // Date range filter
         if (filters.startDate) {
           const reqDate = new Date(req.requestDate);
+          // Parse dd-mm-yyyy to yyyy-mm-dd for reliable Date object creation
           const [day, month, year] = filters.startDate.split("-");
           const start = new Date(Number(year), Number(month) - 1, Number(day));
           if (start && reqDate < start) return false;
         }
         if (filters.endDate) {
           const reqDate = new Date(req.requestDate);
+          // Parse dd-mm-yyyy to yyyy-mm-dd for reliable Date object creation
           const [day, month, year] = filters.endDate.split("-");
           const end = new Date(Number(year), Number(month) - 1, Number(day));
-          end.setDate(end.getDate() + 1);
+          end.setDate(end.getDate() + 1); // Make end date inclusive for filtering
           if (reqDate >= end) return false;
         }
         return true;
@@ -111,9 +133,11 @@ export default function UserReports() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              {/* Date Range */}
-              <div className="space-y-2">
+            {/* IMPORTANT: Removed items-end from the grid container itself */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+              {/* Start Date Filter */}
+              {/* Added flex flex-col justify-end to this div */}
+              <div className="flex flex-col justify-end">
                 <label className="text-sm font-medium text-gray-700">Start Date</label>
                 <Popover open={calendarOpenStart} onOpenChange={setCalendarOpenStart}>
                   <PopoverTrigger asChild>
@@ -135,7 +159,9 @@ export default function UserReports() {
                 </Popover>
                 <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy</p>
               </div>
-              <div className="space-y-2">
+              {/* End Date Filter */}
+              {/* Added flex flex-col justify-end to this div */}
+              <div className="flex flex-col justify-end">
                 <label className="text-sm font-medium text-gray-700">End Date</label>
                 <Popover open={calendarOpenEnd} onOpenChange={setCalendarOpenEnd}>
                   <PopoverTrigger asChild>
@@ -151,14 +177,20 @@ export default function UserReports() {
                         if (date) handleFilterChange("endDate", `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`);
                         setCalendarOpenEnd(false);
                       }}
-                      fromDate={new Date(2000, 0, 1)}
+                      // MODIFICATION HERE: Set fromDate based on selected startDate
+                      fromDate={
+                        filters.startDate
+                          ? new Date(filters.startDate.split('-').reverse().join('-'))
+                          : new Date(2000, 0, 1) // Default if no start date selected
+                      }
                     />
                   </PopoverContent>
                 </Popover>
                 <p className="text-xs text-gray-500 mt-1">Format: dd-mm-yyyy</p>
               </div>
               {/* Status Filter */}
-              <div className="space-y-2">
+              {/* Added flex flex-col justify-end to this div */}
+              <div className="flex flex-col justify-end">
                 <label className="text-sm font-medium text-gray-700">Status</label>
                 <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
                   <SelectTrigger>
@@ -171,22 +203,30 @@ export default function UserReports() {
                     ))}
                   </SelectContent>
                 </Select>
+                {/* Invisible spacer to match height of date format text */}
+                <p className="text-xs text-gray-500 mt-1 invisible">Format: dd-mm-yyyy</p>
               </div>
-              {/* Search */}
-              <div className="space-y-2">
+              {/* Search Filter */}
+              {/* Added flex flex-col justify-end to this div */}
+              <div className="flex flex-col justify-end">
                 <label className="text-sm font-medium text-gray-700">Search</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input placeholder="Search requests..." value={filters.search} onChange={(e) => handleFilterChange("search", e.target.value)} className="pl-10" />
                 </div>
+                {/* Invisible spacer to match height of date format text */}
+                <p className="text-xs text-gray-500 mt-1 invisible">Format: dd-mm-yyyy</p>
               </div>
               {/* Export Button */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">&nbsp;</label>
-                <Button onClick={handleExporttoXlsx} className="w-full bg-green-600 hover:bg-green-700">
+              <div className="flex flex-col justify-end items-end mr-8">
+                {/* Invisible label to align with other labels at the top */}
+                <label className="text-sm font-medium text-gray-700 invisible"> </label>
+                <Button onClick={handleExporttoXlsx} className="bg-green-600 hover:bg-green-700">
                   <Download className="h-4 w-4 mr-2" />
                   Export Report
                 </Button>
+                {/* Invisible spacer to match height of date format text and push button up */}
+                <p className="text-xs text-gray-500 mt-1 invisible">Format: dd-mm-yyyy</p>
               </div>
             </div>
           </CardContent>
@@ -239,9 +279,6 @@ export default function UserReports() {
                         Location
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -268,9 +305,6 @@ export default function UserReports() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {request.location}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatCurrency(request.totalEstimatedCost)}
-                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <StatusBadge status={request.status} />
                           </td>
@@ -278,9 +312,9 @@ export default function UserReports() {
                             {formatDate(request.requestDate)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className="text-[hsl(207,90%,54%)]"
                               onClick={() => handleViewDetails(request)}
                             >
@@ -349,7 +383,8 @@ export default function UserReports() {
                     {selectedRequest?.requisitionNumber}
                   </p>
                 </div>
-                <StatusBadge status={selectedRequest?.status} />
+                {/* Added mr-4 to status badge to prevent overlap with dialog close button */}
+                <StatusBadge status={selectedRequest?.status} className="mr-4" />
               </div>
             </DialogHeader>
 
@@ -383,7 +418,7 @@ export default function UserReports() {
                       <div className="flex items-center text-sm">
                         <Users className="h-4 w-4 mr-2 text-gray-500" />
                         <span className="text-gray-500">Requester:</span>
-                        <span className="ml-2 font-medium">{selectedRequest?.requesterId}</span>
+                        <span className="ml-2 font-medium">{selectedRequester?.name || selectedRequest?.requesterId}</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <Building className="h-4 w-4 mr-2 text-gray-500" />
@@ -417,58 +452,60 @@ export default function UserReports() {
 
                 {/* Line Items */}
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">
-                    Line Items ({requestDetails?.lineItems?.length || 0})
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {requestDetails?.lineItems && requestDetails.lineItems.length > 0 ? (
-                      requestDetails.lineItems.map((item: any, index: number) => (
-                        <Card key={item.id} className="border-l-4 border-l-blue-500">
-                          <CardContent className="p-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="md:col-span-2">
-                                <h4 className="font-semibold text-gray-900 mb-2">
-                                  {index + 1}. {item.itemName}
-                                </h4>
-                                {item.itemJustification && (
-                                  <p className="text-sm text-gray-600 mb-2">
-                                    {item.itemJustification}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                                  <span>Quantity: <strong>{item.requiredQuantity} {item.unitOfMeasure}</strong></span>
-                                  <span>Required by: <strong>{formatDate(item.requiredByDate)}</strong></span>
-                                  <span>Delivery: <strong>{item.deliveryLocation}</strong></span>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-lg font-bold text-green-600">
-                                  {formatCurrency((item.requiredQuantity || 0) * (parseFloat(item.estimatedCost?.toString() || '0')))}
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  {formatCurrency(item.estimatedCost)} per {item.unitOfMeasure}
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No line items found for this request</p>
-                      </div>
-                    )}
-                  </div>
+                  <LineItemsGrid
+                    items={requestDetails?.lineItems || []}
+                    onItemsChange={() => {}}
+                    editable={false}
+                  />
                 </div>
+
+                <Separator />
+
+                {/* Attachments */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <Paperclip className="h-5 w-5 mr-2 text-blue-600" />
+                    Attachments
+                  </h3>
+                  {isLoadingDetails ? (
+                    <div className="text-gray-500">Loading attachments...</div>
+                  ) : requestDetails?.attachments && requestDetails.attachments.length > 0 ? (
+                    <ul className="space-y-2">
+                      {requestDetails.attachments.map((file: any) => (
+                        <li key={file.id} className="flex items-center space-x-2">
+                          <a
+                            href={`/${file.file_path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {file.original_name}
+                          </a>
+                          <span className="text-xs text-gray-400">({(file.file_size / 1024).toFixed(1)} KB)</span>
+                          <button
+                            className="ml-2 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+                            onClick={() => {
+                              window.open(`/api/attachments/${file.id}/download`, '_blank');
+                            }}
+                          >
+                            Download
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-gray-500">No attachments uploaded for this request.</div>
+                  )}
+                </div>
+
+                <Separator />
 
                 {selectedRequest && (
                   <div>
                     {selectedRequest.id && (
                       <>
                         <Comments purchaseRequestId={selectedRequest.id} />
-                        <AuditLog purchaseRequestId={selectedRequest.id} />
+                        <AuditLog purchaseRequestId={selectedRequest.id} requester={selectedRequester} createdAt={selectedRequest.createdAt} />
                       </>
                     )}
                     <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
@@ -482,4 +519,4 @@ export default function UserReports() {
       </div>
     </div>
   );
-} 
+}

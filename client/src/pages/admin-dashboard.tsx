@@ -2,14 +2,13 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Download, Filter, TrendingUp, Clock, DollarSign, BarChart3, Package, Calendar, MapPin, Database, Paperclip } from "lucide-react";
 import qs from "query-string";
-import * as XLSX from 'xlsx'; // 1. Import xlsx library
+import * as XLSX from 'xlsx';
 import { Navbar } from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -22,7 +21,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {Pagination,PaginationContent,PaginationItem,PaginationLink,PaginationPrevious,PaginationNext,} from "@/components/ui/pagination";
 
-// 2. Added the exportToXLSX utility function outside the component
+// Added the exportToXLSX utility function outside the component
 function exportToXLSX(data: any[], filename: string) {
   if (!data || data.length === 0) {
     console.warn("No data to export.");
@@ -45,7 +44,7 @@ function exportToXLSX(data: any[], filename: string) {
 
 
 export default function AdminDashboard() {
-  const [, setLocation] = useLocation();
+  const [location , setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filterForm, setFilterForm] = useState({
@@ -68,6 +67,12 @@ export default function AdminDashboard() {
 
   const { data: stats } = useQuery({
     queryKey: ["/api/dashboard/stats"],
+  });
+   const { data: departments } = useQuery({
+    queryKey: ["/api/admin/masters/departments"],
+  });
+  const { data: locations } = useQuery<string[]>({
+    queryKey: ["/api/admin/reports/locations"],
   });
 
   // Create a clean set of active filters for the API call.
@@ -257,7 +262,6 @@ export default function AdminDashboard() {
 
         {/* Analytics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* ...cards... */}
         </div>
 
         {/* Filters */}
@@ -368,15 +372,8 @@ export default function AdminDashboard() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                {/* ...table headers and body... */}
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <Checkbox
-                        checked={Array.isArray(requests) && requests.length > 0 && selectedRequests.length === requests.length}
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Request Details
                     </th>
@@ -401,12 +398,6 @@ export default function AdminDashboard() {
                   {Array.isArray(requests) && requests.length > 0 ? (
                     requests.slice((page - 1) * pageSize, page * pageSize).map((request: any) => (
                       <tr key={request.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Checkbox
-                            checked={selectedRequests.includes(request.id)}
-                            onCheckedChange={() => handleSelectRequest(request.id)}
-                          />
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">{request.title}</div>

@@ -6,6 +6,8 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 
 interface AuditLogProps {
   purchaseRequestId: number;
+  createdAt?: string;
+  requester?: any;
 }
 
 const actionLabels: Record<string, string> = {
@@ -16,7 +18,7 @@ const actionLabels: Record<string, string> = {
   admin_approved: "Admin Approved",
 };
 
-export function AuditLog({ purchaseRequestId }: AuditLogProps) {
+export function AuditLog({ purchaseRequestId, createdAt, requester }: AuditLogProps) {
   const { data: history, isLoading } = useQuery({
     queryKey: [`/api/purchase-requests/${purchaseRequestId}/audit-logs`],
     queryFn: async () => {
@@ -33,6 +35,19 @@ export function AuditLog({ purchaseRequestId }: AuditLogProps) {
       )
     : [];
 
+  // Add initial submission entry if createdAt is available
+  const submissionEntry = createdAt ? [{
+    id: 'submitted',
+    action: 'submitted',
+    users: requester || { name: 'User' },
+    approval_level: 0,
+    acted_at: createdAt,
+    comments: '',
+  }] : [];
+
+  // Combine and reverse order
+  const fullLog = [...submissionEntry, ...auditLog].reverse();
+
   return (
     <Accordion type="single" collapsible>
       <AccordionItem value="audit">
@@ -42,13 +57,15 @@ export function AuditLog({ purchaseRequestId }: AuditLogProps) {
             <CardContent>
               {isLoading ? (
                 <div>Loading...</div>
-              ) : auditLog.length === 0 ? (
+              ) : fullLog.length === 0 ? (
                 <div className="text-gray-500">No audit log yet.</div>
               ) : (
-                auditLog.map((h: any) => (
+                fullLog.map((h: any) => (
                   <div key={h.id} className="mb-3">
                     <div>
-                      <span className="font-medium">{h.users?.name || "Approver"}</span>{" "}
+                      <span className="font-medium">
+                        {h.users?.name || h.users?.fullName || h.users?.username || h.users?.emp_code || (h.action === 'submitted' ? 'User' : 'Approver')}
+                      </span>{" "}
                       <span className="text-xs text-gray-500">
                         ({actionLabels[h.action?.toLowerCase() || ""] || h.action} at level {h.approval_level} on {h.acted_at ? formatDateTime(h.acted_at) : ""})
                       </span>
