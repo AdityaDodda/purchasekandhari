@@ -302,9 +302,6 @@ export default function AdminReports() {
                         Title
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Requester
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Department
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -333,9 +330,6 @@ export default function AdminReports() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {request.title}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {request.requester?.fullName || 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {request.department}
@@ -450,7 +444,7 @@ export default function AdminReports() {
                     <CardContent className="space-y-3">
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 mr-2 text-gray-500" />
-                        {/* <span className="text-gray-500">Submitted:</span> */}
+                        <span className="text-gray-500">Submitted:</span>
                         <span className="ml-2 font-medium">
                           {selectedRequest && formatDate(selectedRequest.requestDate)}
                         </span>
@@ -538,17 +532,16 @@ export default function AdminReports() {
                   </div>
                 </div>
 
-                {selectedRequest && (
+                 {selectedRequest && (
                   <div>
-                    <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
-                    <ApprovalProgress request={selectedRequest} />
-                    {/* Show Comments & Audit Log below approval progress only when viewing details */}
                     {selectedRequest.id && (
                       <>
                         <Comments purchaseRequestId={selectedRequest.id} />
                         <AuditLog purchaseRequestId={selectedRequest.id} />
                       </>
                     )}
+                    <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
+                    <ApprovalProgress request={selectedRequest} />
                   </div>
                 )}
               </div>

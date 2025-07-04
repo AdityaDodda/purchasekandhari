@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Clock, CheckCircle, XCircle, Package, Calendar, MapPin, DollarSign, Paperclip } from "lucide-react";
+import { FileText, Clock, CheckCircle, XCircle, Package, Calendar, MapPin, Users, DollarSign, Paperclip } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -356,6 +356,11 @@ export default function Dashboard() {
                           {selectedRequest && formatDate(selectedRequest.requestDate)}
                         </span>
                       </div>
+                        <div className="flex items-center text-sm">
+                          <Users className="h-4 w-4 mr-2 text-gray-500" />
+                          <span className="text-gray-500">Requester:</span>
+                          <span className="ml-2 font-medium">{selectedRequest?.requesterId}</span>
+                        </div>
                       <div className="flex items-center text-sm">
                         <MapPin className="h-4 w-4 mr-2 text-gray-500" />
                         <span className="text-gray-500">Department:</span>

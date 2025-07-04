@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query"; // Keep this as primary useQuery
-import { Plus, Search, Download, Filter, X, Calendar, MapPin, Package, DollarSign, Paperclip } from "lucide-react";
-import { CommentsAuditLog } from "@/components/ui/comments-audit-log";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Search, Download, Filter, X, Calendar, MapPin, Package, DollarSign, Users, Paperclip } from "lucide-react";
 import { Comments } from "@/components/ui/comments";
 import { AuditLog } from "@/components/ui/audit-log";
-
 import { Navbar } from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,8 +22,6 @@ import {
   PaginationPrevious,
   PaginationNext,
 } from "@/components/ui/pagination";
-// Removed the redundant 'useReactQuery' import alias if it refers to the same TanStack useQuery
-// import { useQuery as useReactQuery } from "@tanstack/react-query"; 
 
 export default function MyRequests() {
   const [, setLocation] = useLocation();
@@ -52,7 +48,7 @@ export default function MyRequests() {
     }
   });
 
-  const { data: user } = useQuery({ // Changed from useReactQuery to useQuery for consistency
+  const { data: user } = useQuery({
     queryKey: ["/api/auth/user"],
     queryFn: async () => {
       const res = await fetch("/api/auth/user", { credentials: 'include' });
@@ -68,7 +64,7 @@ export default function MyRequests() {
       if (!res.ok) throw new Error('Failed to fetch request details');
       return res.json();
     },
-    enabled: !!selectedRequest, // Only run this query if a request is selected
+    enabled: !!selectedRequest,
   });
 
   const { data: attachments = [], isLoading: isLoadingAttachments } = useQuery({
@@ -440,6 +436,11 @@ export default function MyRequests() {
                           {selectedRequest && formatDate(selectedRequest.requestDate)}
                         </span>
                       </div>
+                        <div className="flex items-center text-sm">
+                          <Users className="h-4 w-4 mr-2 text-gray-500" />
+                          <span className="text-gray-500">Requester:</span>
+                          <span className="ml-2 font-medium">{selectedRequest?.requesterId}</span>
+                        </div>
                       <div className="flex items-center text-sm">
                         <MapPin className="h-4 w-4 mr-2 text-gray-500" />
                         <span className="text-gray-500">Department:</span>
@@ -527,13 +528,6 @@ export default function MyRequests() {
                 </div>
 
                 <Separator />
-
-                {/* Removed debug block as it's no longer needed */}
-                {/* <div style={{ background: '#ffe', color: '#a00', padding: 8, marginBottom: 8 }}>
-                  <div>DEBUG: selectedRequest.pr_number = {String(selectedRequest?.pr_number)}</div>
-                  <div>DEBUG: attachments = {JSON.stringify(attachments)}</div>
-                  <div>DEBUG: isLoadingAttachments = {String(isLoadingAttachments)}</div>
-                </div> */}
 
                 {/* Attachments */}
                 <div>
