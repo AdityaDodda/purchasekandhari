@@ -366,6 +366,9 @@ export function registerRoutes(app: Express): Server {
       if (req.query.currentApproverId) {
         filters.currentApproverId = req.query.currentApproverId;
       }
+      if (req.query.approverEmpCode) {
+        filters.approverEmpCode = req.query.approverEmpCode;
+      }
       if (req.query.status) {
         filters.status = req.query.status;
       }
@@ -611,7 +614,7 @@ export function registerRoutes(app: Express): Server {
           await storage.createAuditLog({
             pr_number: prNumber,
             approver_emp_code: String(user.emp_code),
-            approval_level: 99,
+            approval_level: 4,
             action: "admin_approved",
             comment,
           });

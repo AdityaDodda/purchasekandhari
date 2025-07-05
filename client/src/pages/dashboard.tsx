@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Clock, CheckCircle, XCircle, Package, Calendar, MapPin, Users, DollarSign, Paperclip } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ interface PurchaseRequest {
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [activeView, setActiveView] = useState<'my' | 'approver' | 'pending' | 'all'>('my');
@@ -66,9 +67,9 @@ export default function Dashboard() {
 
   let queryParams: Record<string, any> = {};
   if (activeView === 'approver' && user) {
-    queryParams = { approverEmpCode: user.emp_code, status: 'pending' };
+    queryParams = { currentApproverId: user.emp_code, status: 'pending' };
   } else if (activeView === 'pending') {
-    queryParams = { approverEmpCode: user?.emp_code, status: 'pending' };
+    queryParams = { currentApproverId: user?.emp_code, status: 'pending' };
   } else if (activeView === 'my') {
     queryParams = { createdBy: user?.emp_code };
   }
@@ -513,6 +514,9 @@ export default function Dashboard() {
                                 });
                                 alert('Request approved!');
                                 setShowDetailsModal(false);
+                                // Invalidate queries to refresh the data
+                                queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
                               } catch (e) {
                                 alert('Failed to approve request.');
                               }
@@ -537,6 +541,9 @@ export default function Dashboard() {
                                 });
                                 alert('Request returned!');
                                 setShowDetailsModal(false);
+                                // Invalidate queries to refresh the data
+                                queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
                               } catch (e) {
                                 alert('Failed to return request.');
                               }
@@ -561,6 +568,9 @@ export default function Dashboard() {
                                 });
                                 alert('Request rejected!');
                                 setShowDetailsModal(false);
+                                // Invalidate queries to refresh the data
+                                queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
                               } catch (e) {
                                 alert('Failed to reject request.');
                               }

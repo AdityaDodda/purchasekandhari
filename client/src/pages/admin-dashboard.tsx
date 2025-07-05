@@ -161,18 +161,17 @@ export default function AdminDashboard() {
     }
 
     const formattedData = dataToExport.map(req => {
-      const r = req.requester;
-      const requesterId = r?.id || r?.emp_code || req.requesterId || r;
+      const requesterId = req.requesterId;
       const user = Array.isArray(users) && users.find(
-        (u: any) => u.id === requesterId || u.emp_code === requesterId
+        (u: any) => u.emp_code === requesterId
       );
       return {
         "Title": req.title,
-      "Requisition Number": req.requisitionNumber,
+        "Requisition Number": req.requisitionNumber,
         "Request Date": formatDate(req.requestDate),
-        "Requester": user?.fullName || user?.name || r?.fullName || r?.name || r?.emp_code || req.requesterId || r || '',
-      "Department": req.department,
-      "Location": req.location,
+        "Requester": user?.name || requesterId || '',
+        "Department": req.department,
+        "Location": req.location,
         "Value": formatCurrency(req.totalEstimatedCost),
         "Status": req.status,
       };
@@ -417,12 +416,11 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {(() => {
-                            const r = request.requester;
-                            const requesterId = r?.id || r?.emp_code || request.requesterId || r;
+                            const requesterId = request.requesterId;
                             const user = Array.isArray(users) && users.find(
-                              (u: any) => u.id === requesterId || u.emp_code === requesterId
+                              (u: any) => u.emp_code === requesterId
                             );
-                            return user?.fullName || user?.name || r?.fullName || r?.name || r?.emp_code || request.requesterId || r || '';
+                            return user?.name || requesterId || '';
                           })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -567,12 +565,11 @@ export default function AdminDashboard() {
                         <Users className="h-4 w-4 mr-2 text-gray-500" />
                         <span className="text-gray-500">Requester:</span>
                         <span className="ml-2 font-medium">{(() => {
-                          const r = selectedRequest?.requester;
-                          const requesterId = r?.id || r?.emp_code || selectedRequest?.requesterId || r;
+                          const requesterId = selectedRequest?.requesterId;
                           const user = Array.isArray(users) && users.find(
-                            (u: any) => u.id === requesterId || u.emp_code === requesterId
+                            (u: any) => u.emp_code === requesterId
                           );
-                          return user?.fullName || user?.name || r?.fullName || r?.name || r?.emp_code || selectedRequest?.requesterId || r || '';
+                          return user?.name || requesterId || '';
                         })()}</span>
                       </div>
                       <div className="flex items-center text-sm">

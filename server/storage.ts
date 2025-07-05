@@ -302,11 +302,20 @@ export class DatabaseStorage implements IStorage {
         { requester_emp_code: filters.createdBy },
       ];
     }
-    // Parallel approval logic for level 3
+    if (filters.currentApproverId) {
+      where.OR = where.OR || [];
+      where.OR.push({ current_approver_emp_code: filters.currentApproverId });
+      // For parallel approval, we need to fetch requests with null current_approver_emp_code
+      // but we'll filter them properly in JavaScript to only show to the correct approvers
+      where.OR.push({ current_approver_emp_code: null });
+    }
+    // Handle approverEmpCode for legacy/parallel logic
     if (filters.approverEmpCode) {
       where.OR = where.OR || [];
-      // Normal case: current approver
       where.OR.push({ current_approver_emp_code: filters.approverEmpCode });
+      // For parallel approval, we need to fetch requests with null current_approver_emp_code
+      // but we'll filter them properly in JavaScript to only show to the correct approvers
+      where.OR.push({ current_approver_emp_code: null });
       // Parallel case: level 3, current_approver_emp_code is null, user is 3a or 3b
       // We'll filter these after fetching, since Prisma can't join approval_matrix easily here
     }
@@ -320,6 +329,8 @@ export class DatabaseStorage implements IStorage {
       where.location = filters.location;
     }
     // Fetch requests
+    console.log('[DEBUG] getAllPurchaseRequests filters:', filters);
+    console.log('[DEBUG] getAllPurchaseRequests where clause:', where);
     const requests = await this.prisma.purchase_requests.findMany({
       where,
       orderBy: { created_at: 'desc' },
@@ -327,6 +338,7 @@ export class DatabaseStorage implements IStorage {
         line_items: true,
       },
     });
+    console.log('[DEBUG] getAllPurchaseRequests raw results count:', requests.length);
     // Fetch approval matrix for all relevant requester_emp_codes
     const empCodes = Array.from(new Set(requests.map((r: any) => r.requester_emp_code).filter(Boolean)));
     const approvalMatrices = await this.prisma.approval_matrix.findMany({
@@ -335,31 +347,39 @@ export class DatabaseStorage implements IStorage {
     const matrixMap = Object.fromEntries(approvalMatrices.map(m => [m.emp_code, m]));
     // If parallel approval filter, filter in JS for level 3
     let filteredRequests = requests;
-    if (filters.approverEmpCode) {
+    if (filters.approverEmpCode || filters.currentApproverId) {
+      const approverId = filters.approverEmpCode || filters.currentApproverId;
+      console.log('[DEBUG] Filtering requests for approver:', approverId);
       filteredRequests = requests.filter((req: any) => {
-        if (req.current_approver_emp_code === filters.approverEmpCode) return true;
-        // If approved at level 3, only show to the approver who approved
-        if (
-          req.status === 'approved' &&
-          req.currentApprovalLevel === 3 &&
-          req.current_approver_emp_code &&
-          req.current_approver_emp_code === filters.approverEmpCode
-        ) {
+        console.log('[DEBUG] Checking request:', req.pr_number, 'status:', req.status, 'current_approver:', req.current_approver_emp_code, 'level:', req.current_approval_level);
+        
+        // If status filter is 'pending', only show pending requests
+        if (filters.status === 'pending' && req.status !== 'pending') {
+          console.log('[DEBUG] Filtering out non-pending request:', req.pr_number);
+          return false;
+        }
+        
+        if (req.current_approver_emp_code === approverId) {
+          console.log('[DEBUG] Including request assigned to approver:', req.pr_number);
           return true;
         }
+        
         // Parallel approval: level 3, current_approver_emp_code is null
         const matrix = matrixMap[req.requester_emp_code];
         if (
           req.current_approval_level === 3 &&
           !req.current_approver_emp_code &&
           matrix &&
-          (matrix.approver_3a_emp_code === filters.approverEmpCode ||
-            matrix.approver_3b_emp_code === filters.approverEmpCode)
+          (matrix.approver_3a_emp_code === approverId ||
+            matrix.approver_3b_emp_code === approverId)
         ) {
+          console.log('[DEBUG] Including parallel approval request:', req.pr_number);
           return true;
         }
+        console.log('[DEBUG] Filtering out request:', req.pr_number);
         return false;
       });
+      console.log('[DEBUG] Filtered results count:', filteredRequests.length);
     }
     // Map DB fields to API fields expected by frontend
     return filteredRequests.map((req: any) => ({
