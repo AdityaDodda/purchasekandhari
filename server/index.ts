@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
+import { PrismaSessionStore } from "./sessionStore";
+import { PrismaClient } from "@prisma/client";
 
 dotenv.config();
 
@@ -11,16 +13,20 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration
+// Initialize Prisma client for session store
+const prisma = new PrismaClient();
+
+// Session configuration with Prisma store
 app.use(
   session({
+    store: new PrismaSessionStore(prisma),
     secret: process.env.SESSION_SECRET || "kandhari-global-beverages-secret-key",
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: false, // Set to true if using HTTPS in production
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000, // Default 24 hours, will be overridden in login route
     },
   })
 );
@@ -74,7 +80,7 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    const port = process.env.PORT || 5000;
+    const port = parseInt(process.env.PORT || "5000", 10);
     server.listen(port, "127.0.0.1", () => {
       log(`Server is running on http://127.0.0.1:${port}`);
     });

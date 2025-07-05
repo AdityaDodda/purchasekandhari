@@ -182,3 +182,11 @@ model attachments {
   uploaded_at         DateTime?         @default(now()) @db.Timestamp(6)
   purchase_requests   purchase_requests @relation(fields: [purchase_request_id], references: [pr_number], onDelete: Cascade, onUpdate: NoAction)
 }
+
+model sessions {
+  sid    String   @id @db.VarChar(255)
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire])
+}

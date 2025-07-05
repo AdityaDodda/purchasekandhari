@@ -128,9 +128,10 @@ export function registerRoutes(app: Express): Server {
   // Auth routes
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { email, password } = z.object({
+      const { email, password, rememberMe } = z.object({
         email: z.string().email("Invalid email format."),
         password: z.string(),
+        rememberMe: z.boolean().optional().default(false),
       }).parse(req.body);
 
       const user = await storage.getUserByEmail(email);
@@ -165,6 +166,15 @@ export function registerRoutes(app: Express): Server {
         location: user.location ?? "",
         role: user.role ?? "",
       };
+
+      // Set session cookie maxAge based on rememberMe
+      if (rememberMe) {
+        // 30 days for "Remember Me"
+        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+      } else {
+        // 24 hours for regular sessions
+        req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
+      }
 
       res.json({ user: req.session.user });
     } catch (error) {
