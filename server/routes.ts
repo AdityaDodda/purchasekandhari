@@ -6,7 +6,7 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { sendPasswordResetEmail, sendPurchaseRequestToApprovers } from "./email";
+import { sendPasswordResetEmail, sendPurchaseRequestToApprovers, sendToApprover, sendToRequester, sendFinalApproval } from "./email";
 
 // Zod Schemas (Redefined for Prisma Compatibility with your new schema)
 const insertUserSchema = z.object({
@@ -350,7 +350,32 @@ export function registerRoutes(app: Express): Server {
         status: req.body.status || 'pending',
         lineItems: mappedLineItems,
       });
-      res.status(201).json(pr);
+      // Optionally fetch the PR from DB for freshest data
+      const prFromDb = await storage.getPurchaseRequest(pr.pr_number);
+      // Send email to first approver
+      try {
+        const approvalMatrixList = await storage.getAllApprovalMatrix();
+        const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(requesterEmpCode) || (m.department === department && m.site === location));
+        if (approvalMatrix && approvalMatrix.approver_1_emp_code) {
+          const approver = await storage.getUserByEmployeeNumber(approvalMatrix.approver_1_emp_code);
+          const requesterUser = await storage.getUserByEmployeeNumber(requesterEmpCode);
+          const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
+          if (approver && typeof approver.email === 'string') {
+            const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${pr.pr_number}`;
+            await sendToApprover(
+              approver.email,
+              pr.pr_number,
+              String(pr.department ?? ''),
+              String(pr.location ?? ''),
+              approvalLink,
+              requesterName
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Error sending email to first approver:', err);
+      }
+      res.status(201).json(prFromDb || pr);
     } catch (error: any) {
       console.error("Create purchase request error:", error);
       res.status(500).json({ message: "Internal server error", details: error.message });
@@ -494,6 +519,32 @@ export function registerRoutes(app: Express): Server {
         });
       }
       await storage.updatePurchaseRequest(prNumber, updateData);
+      // If resubmitted from returned, send email to first approver
+      if (pr.status === 'returned') {
+        try {
+          const updatedPr = await storage.getPurchaseRequest(prNumber);
+          const approvalMatrixList = await storage.getAllApprovalMatrix();
+          const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(updatedPr.requester_emp_code));
+          if (approvalMatrix && approvalMatrix.approver_1_emp_code) {
+            const approver = await storage.getUserByEmployeeNumber(approvalMatrix.approver_1_emp_code);
+            const requesterUser = await storage.getUserByEmployeeNumber(updatedPr.requester_emp_code);
+            const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
+            if (approver && typeof approver.email === 'string') {
+              const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${prNumber}`;
+              await sendToApprover(
+                approver.email,
+                prNumber,
+                String(updatedPr.department ?? ''),
+                String(updatedPr.location ?? ''),
+                approvalLink,
+                requesterName
+              );
+            }
+          }
+        } catch (err) {
+          console.error('Error sending email to first approver on resubmission:', err);
+        }
+      }
       res.json({ message: "Request updated successfully" });
     } catch (error) {
       console.error("Update purchase request error:", error);
@@ -631,6 +682,22 @@ export function registerRoutes(app: Express): Server {
         } catch (err) {
           console.error(`[APPROVAL] ERROR creating audit log for admin override:`, err);
         }
+        // Send final approval email to requester and all approvers
+        try {
+          const requester = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
+          const requesterName = requester && typeof requester.name === 'string' ? requester.name : '';
+          const approverEmpCodes = [
+            approvalMatrix.approver_1_emp_code,
+            approvalMatrix.approver_2_emp_code,
+            approvalMatrix.approver_3a_emp_code,
+            approvalMatrix.approver_3b_emp_code
+          ].filter((emp): emp is string => typeof emp === 'string' && !!emp);
+          const approverEmails = (await Promise.all(approverEmpCodes.map(emp => storage.getUserByEmployeeNumber(emp)))).map(u => u && typeof u.email === 'string' ? u.email : null).filter((e): e is string => !!e);
+          const recipients = [requester && typeof requester.email === 'string' ? requester.email : null, ...approverEmails].filter((e): e is string => !!e);
+          await sendFinalApproval(recipients, prNumber, 'approved', requesterName, comment);
+        } catch (err) {
+          console.error('Error sending final approval email:', err);
+        }
         return res.json({ message: "Request approved by admin." });
       }
       // Normal approval flow
@@ -657,6 +724,22 @@ export function registerRoutes(app: Express): Server {
           });
         } catch (err) {
           console.error(`[APPROVAL] ERROR creating audit log for final approval:`, err);
+        }
+        // Send final approval email to requester and all approvers
+        try {
+          const requester = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
+          const requesterName = requester && typeof requester.name === 'string' ? requester.name : '';
+          const approverEmpCodes = [
+            approvalMatrix.approver_1_emp_code,
+            approvalMatrix.approver_2_emp_code,
+            approvalMatrix.approver_3a_emp_code,
+            approvalMatrix.approver_3b_emp_code
+          ].filter((emp): emp is string => typeof emp === 'string' && !!emp);
+          const approverEmails = (await Promise.all(approverEmpCodes.map(emp => storage.getUserByEmployeeNumber(emp)))).map(u => u && typeof u.email === 'string' ? u.email : null).filter((e): e is string => !!e);
+          const recipients = [requester && typeof requester.email === 'string' ? requester.email : null, ...approverEmails].filter((e): e is string => !!e);
+          await sendFinalApproval(recipients, prNumber, 'approved', requesterName, comment);
+        } catch (err) {
+          console.error('Error sending final approval email:', err);
         }
         return res.json({ message: "Request fully approved." });
       } else {
@@ -707,6 +790,36 @@ export function registerRoutes(app: Express): Server {
               console.error(`[APPROVAL] ERROR updating PR for parallel waiting:`, err);
               return res.status(500).json({ message: "Failed to update purchase request (parallel waiting)." });
             }
+            // Send email to both 3rd level approvers
+            try {
+              const requesterUser = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
+              const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
+              const approver3a = await storage.getUserByEmployeeNumber(approvalMatrix.approver_3a_emp_code);
+              const approver3b = await storage.getUserByEmployeeNumber(approvalMatrix.approver_3b_emp_code);
+              const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${prNumber}`;
+              if (approver3a && typeof approver3a.email === 'string') {
+                await sendToApprover(
+                  approver3a.email,
+                  prNumber,
+                  String(pr.department ?? ''),
+                  String(pr.location ?? ''),
+                  approvalLink,
+                  requesterName
+                );
+              }
+              if (approver3b && typeof approver3b.email === 'string') {
+                await sendToApprover(
+                  approver3b.email,
+                  prNumber,
+                  String(pr.department ?? ''),
+                  String(pr.location ?? ''),
+                  approvalLink,
+                  requesterName
+                );
+              }
+            } catch (err) {
+              console.error('Error sending email to 3rd level approvers:', err);
+            }
             return res.json({ message: "Approved by one, waiting for other approver at level 3." });
           }
         } else {
@@ -731,6 +844,25 @@ export function registerRoutes(app: Express): Server {
             });
           } catch (err) {
             console.error(`[APPROVAL] ERROR creating audit log for next approver:`, err);
+          }
+          // Send email to next approver
+          try {
+            const nextApproverUser = await storage.getUserByEmployeeNumber(nextApprover);
+            const requesterUser = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
+            const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
+            if (nextApproverUser && typeof nextApproverUser.email === 'string') {
+              const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${prNumber}`;
+              await sendToApprover(
+                nextApproverUser.email,
+                prNumber,
+                String(pr.department ?? ''),
+                String(pr.location ?? ''),
+                approvalLink,
+                requesterName
+              );
+            }
+          } catch (err) {
+            console.error('Error sending email to next approver:', err);
           }
           return res.json({ message: `Moved to next approver at level ${nextLevel}.` });
         }
@@ -783,6 +915,16 @@ export function registerRoutes(app: Express): Server {
       } catch (err) {
         console.error(`[REJECT] ERROR creating audit log:`, err);
       }
+      // Send email to requester
+      try {
+        const requester = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
+        const requesterName = requester && typeof requester.name === 'string' ? requester.name : '';
+        if (requester && typeof requester.email === 'string') {
+          await sendToRequester(requester.email, prNumber, 'rejected', comment, requesterName);
+        }
+      } catch (err) {
+        console.error('Error sending rejection email to requester:', err);
+      }
       res.json({ message: "Request rejected." });
     } catch (error) {
       console.error("Reject request error:", error);
@@ -831,6 +973,16 @@ export function registerRoutes(app: Express): Server {
         });
       } catch (err) {
         console.error(`[RETURN] ERROR creating audit log:`, err);
+      }
+      // Send email to requester
+      try {
+        const requester = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
+        const requesterName = requester && typeof requester.name === 'string' ? requester.name : '';
+        if (requester && typeof requester.email === 'string') {
+          await sendToRequester(requester.email, prNumber, 'returned', comment, requesterName);
+        }
+      } catch (err) {
+        console.error('Error sending return email to requester:', err);
       }
       res.json({ message: "Request returned for edit." });
     } catch (error) {

@@ -14,47 +14,37 @@ interface PurchaseRequest {
 }
 
 export function ApprovalProgress({ request }: { request: PurchaseRequest }) {
-  const { data: workflow } = useQuery({
-    queryKey: ["/api/approval-workflow", request.department, request.location],
-    enabled: !!request,
+  // Fetch audit history for this request
+  const { data: auditHistory } = useQuery({
+    queryKey: ["/api/purchase-requests", request.id, "audit-logs"],
+    queryFn: async () => {
+      const res = await fetch(`/api/purchase-requests/${request.id}/audit-logs`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch audit logs');
+      return res.json();
+    },
+    enabled: !!request?.id,
   });
 
-  // Determine stage status
-  // 0: not started, 1: approved, 2: rejected, 3: current
-  let stages: Array<'approved' | 'pending' | 'rejected' | 'blank'> = ['pending', 'pending', 'pending'];
-  if (request.status === 'approved') {
-    stages = ['approved', 'approved', 'approved'];
-  } else if (request.status === 'rejected') {
-    // Mark up to currentApprovalLevel-1 as approved, current as rejected, rest blank
-    for (let i = 0; i < 3; i++) {
-      if (i < (request.currentApprovalLevel ?? 1) - 1) {
-        stages[i] = 'approved';
-      } else if (i === (request.currentApprovalLevel ?? 1) - 1) {
-        stages[i] = 'rejected';
-      } else {
-        stages[i] = 'blank';
-      }
-    }
-  } else if (request.status === 'returned') {
-    stages = ['blank', 'blank', 'blank'];
-  } else {
-    // Pending: mark up to currentApprovalLevel-1 as approved, current as pending, rest as pending
-    for (let i = 0; i < 3; i++) {
-      if (i < (request.currentApprovalLevel ?? 1) - 1) {
-        stages[i] = 'approved';
-      } else if (i === (request.currentApprovalLevel ?? 1) - 1) {
-        stages[i] = 'pending';
-      } else {
-        stages[i] = 'pending';
-      }
-    }
-  }
+  const levels = [1, 2, 3];
+  // Find the latest action for each level
+  const stageStatus: Array<'approved' | 'pending' | 'rejected' | 'blank'> = levels.map((level) => {
+    if (!Array.isArray(auditHistory)) return 'pending';
+    // Find the latest action for this level
+    const actions = auditHistory.filter((h: any) => h.approval_level === level);
+    if (actions.length === 0) return 'pending';
+    // Find the last action for this level
+    const last = actions[actions.length - 1];
+    if (last.action === 'approved' || last.action === 'admin_approved') return 'approved';
+    if (last.action === 'rejected') return 'rejected';
+    if (last.action === 'returned') return 'blank';
+    return 'pending';
+  });
 
   return (
     <div className="space-y-2">
       <div className="flex flex-col items-center mt-2">
         <div className="flex items-center justify-center gap-x-4">
-          {stages.map((status, idx) => (
+          {stageStatus.map((status, idx) => (
             <div key={idx} className="flex flex-col items-center">
               <div className="flex items-center">
                 {status === 'approved' && <CheckCircle className="h-8 w-8 text-green-500" />}
@@ -62,7 +52,7 @@ export function ApprovalProgress({ request }: { request: PurchaseRequest }) {
                 {status === 'rejected' && <XCircle className="h-8 w-8 text-red-500" />}
                 {status === 'blank' && <Circle className="h-8 w-8 text-gray-200" />}
                 {idx < 2 && (
-                  <div className={`h-1 w-8 ${status === 'approved' && stages[idx+1] === 'approved' ? 'bg-green-500' : status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'} mx-1 rounded-full`} />
+                  <div className={`h-1 w-8 ${status === 'approved' && stageStatus[idx+1] === 'approved' ? 'bg-green-500' : status === 'rejected' ? 'bg-red-500' : 'bg-gray-300'} mx-1 rounded-full`} />
                 )}
               </div>
               <span className="text-xs text-gray-500 mt-1">Level {idx + 1}</span>

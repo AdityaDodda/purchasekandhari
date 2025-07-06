@@ -104,7 +104,12 @@ export default function AdminReports() {
         if (filters.status !== "all" && req.status !== filters.status) return false;
         if (filters.department !== "all" && req.department !== filters.department) return false;
         if (filters.location !== "all" && req.location !== filters.location) return false;
-        if (filters.requester !== "all" && req.requester?.id?.toString() !== filters.requester) return false;
+        if (
+          filters.requester !== "all" &&
+          ![req.requester?.id?.toString(), req.requester?.emp_code, req.requesterId, req.requester]
+            .filter(Boolean)
+            .includes(filters.requester)
+        ) return false;
         if (filters.search) {
           const search = filters.search.toLowerCase();
           const matches =
