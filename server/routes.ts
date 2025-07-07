@@ -792,10 +792,10 @@ export function registerRoutes(app: Express): Server {
             }
             // Send email to both 3rd level approvers
             try {
+              const approver3a = typeof approvalMatrix.approver_3a_emp_code === 'string' ? await storage.getUserByEmployeeNumber(approvalMatrix.approver_3a_emp_code) : null;
+              const approver3b = typeof approvalMatrix.approver_3b_emp_code === 'string' ? await storage.getUserByEmployeeNumber(approvalMatrix.approver_3b_emp_code) : null;
               const requesterUser = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
               const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
-              const approver3a = await storage.getUserByEmployeeNumber(approvalMatrix.approver_3a_emp_code);
-              const approver3b = await storage.getUserByEmployeeNumber(approvalMatrix.approver_3b_emp_code);
               const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${prNumber}`;
               if (approver3a && typeof approver3a.email === 'string') {
                 await sendToApprover(
@@ -993,7 +993,8 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/dashboard/stats", requireAuth, async (req: any, res) => {
     try {
-      const requests = await storage.getAllPurchaseRequests();
+      const userEmpCode = req.session.user?.emp_code;
+      const requests = await storage.getAllPurchaseRequests({ createdBy: userEmpCode });
       const stats = {
         totalRequests: requests.length,
         pendingRequests: requests.filter(r => r.status === 'pending').length,
@@ -1034,6 +1035,8 @@ export function registerRoutes(app: Express): Server {
     try {
       const { type } = req.params;
       const search = (req.query.search as string) || '';
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 10;
       let result;
       switch (type) {
         case 'users':
@@ -1044,6 +1047,7 @@ export function registerRoutes(app: Express): Server {
           break;
         case 'sites':
           result = await storage.getAllSites(search);
+          result = result.map(site => ({ ...site, id: site.id.toString() }));
           break;
         case 'approval-matrix':
           result = await storage.getAllApprovalMatrix(search);
@@ -1056,9 +1060,11 @@ export function registerRoutes(app: Express): Server {
           break;
         default:
           console.warn(`WARN: GET request for unimplemented master type: ${type}`);
-          return res.json([]);
+          return res.json({ data: [], totalCount: 0 });
       }
-      res.json(result);
+      const totalCount = result.length;
+      const pagedData = result.slice((page - 1) * pageSize, page * pageSize);
+      res.json({ data: pagedData, totalCount });
     } catch (error) {
       console.error(`Error fetching ${req.params.type} master data:`, error);
       res.status(500).json({ message: `Error fetching ${req.params.type} master data: ${error instanceof Error ? error.message : String(error)}` });
@@ -1157,6 +1163,123 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       res.status(500).json({ message: 'Failed to fetch user' });
     }
+  });
+
+  // ADMIN MASTERS
+  // CREATE
+  app.post('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
+    try {
+      const { type } = req.params;
+      const data = req.body;
+      let result;
+      switch (type) {
+        case 'users':
+          const tempPassword = 'Temp@123';
+          const hashedPassword = await bcrypt.hash(tempPassword, 10);
+          result = await storage.createUser({
+            ...data,
+            password: hashedPassword,
+            must_reset_password: true,
+          });
+          break;
+        case 'departments':
+          result = await storage.createDepartment(data);
+          break;
+        case 'sites':
+          result = await storage.createSite(data);
+          result = { ...result, id: result.id.toString() };
+          break;
+        case 'approval-matrix':
+          result = await storage.createApprovalMatrix(data);
+          break;
+        case 'inventory':
+          result = await storage.createInventory(data);
+          break;
+        case 'vendors':
+          result = await storage.createVendor(data);
+          break;
+        default:
+          return res.status(400).json({ message: `POST not supported for master type: ${type}` });
+      }
+      res.status(201).json(result);
+    } catch (error) {
+      console.error(`Error creating ${req.params.type} master data:`, error);
+      res.status(500).json({ message: `Error creating ${req.params.type} master data: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  });
+
+  // UPDATE
+  app.put('/api/admin/masters/:type/:id', requireAuth, requireRole(['admin']), async (req: any, res) => {
+    try {
+      const { type, id } = req.params;
+      const data = req.body;
+      let result;
+      switch (type) {
+        case 'users':
+          result = await storage.updateUser(id, data);
+          break;
+        case 'departments':
+          result = await storage.updateDepartment(id, data);
+          break;
+        case 'sites':
+          result = await storage.updateSite(BigInt(id), data);
+          result = { ...result, id: result.id.toString() };
+          break;
+        case 'approval-matrix':
+          result = await storage.updateApprovalMatrix(id, data);
+          break;
+        case 'inventory':
+          result = await storage.updateInventory(id, data);
+          break;
+        case 'vendors':
+          result = await storage.updateVendor(id, data);
+          break;
+        default:
+          return res.status(400).json({ message: `PUT not supported for master type: ${type}` });
+      }
+      res.json(result);
+    } catch (error) {
+      console.error(`Error updating ${req.params.type} master data:`, error);
+      res.status(500).json({ message: `Error updating ${req.params.type} master data: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  });
+
+  // DELETE
+  app.delete('/api/admin/masters/:type/:id', requireAuth, requireRole(['admin']), async (req: any, res) => {
+    try {
+      const { type, id } = req.params;
+      switch (type) {
+        case 'users':
+          await storage.deleteUser(id);
+          break;
+        case 'departments':
+          await storage.deleteDepartment(id);
+          break;
+        case 'sites':
+          await storage.deleteSite(BigInt(id));
+          break;
+        case 'approval-matrix':
+          await storage.deleteApprovalMatrix(id);
+          break;
+        case 'inventory':
+          await storage.deleteInventory(id);
+          break;
+        case 'vendors':
+          await storage.deleteVendor(id);
+          break;
+        default:
+          return res.status(400).json({ message: `DELETE not supported for master type: ${type}` });
+      }
+      res.json({ message: `${type} record deleted successfully` });
+    } catch (error) {
+      console.error(`Error deleting ${req.params.type} master data:`, error);
+      res.status(500).json({ message: `Error deleting ${req.params.type} master data: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  });
+
+  // Catch-all for unknown API routes
+  app.use('/api', (req, res) => {
+    res.status(404).json({ message: 'API route not found' });
   });
 
   const httpServer = createServer(app);

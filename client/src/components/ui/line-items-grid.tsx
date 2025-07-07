@@ -349,7 +349,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                   />
                 </div>
                 <div>
-                  <Label htmlFor="estimatedCost">Estimated Per Unit Cost (₹)</Label>
+                  <Label htmlFor="estimatedCost">Estimated Cost (₹)</Label>
                   <Input
                     id="estimatedCost"
                     type="text"
@@ -440,7 +440,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <th className="text-left p-3 font-semibold text-sm border-r">Unit</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Required By</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Location</th>
-                    <th className="text-left p-3 font-semibold text-sm border-r">Per Unit Item Cost (₹)</th>
+                    <th className="text-left p-3 font-semibold text-sm border-r">Item Cost (₹)</th>
                     {editable && <th className="text-center p-3 font-semibold text-sm">Actions</th>}
                   </tr>
                 </thead>

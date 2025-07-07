@@ -73,7 +73,7 @@ export default function AdminMasters() {
   const { data: apiResponse, isLoading } = useQuery<{ data: any[]; totalCount: number }>({
     queryKey: ['adminMasters', activeTab, searchQuery, currentPage, pageSize], 
     queryFn: async ({ queryKey }) => {
-      const [_queryName, type, search, page, size] = queryKey;
+      const [_queryName, type, search, page, size] = queryKey as [string, string, string, number, number];
       
       const params = new URLSearchParams();
       if (search) {
@@ -108,9 +108,13 @@ export default function AdminMasters() {
     },
   });
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: number | string) => {
     if (confirm('Are you sure you want to delete this record?')) {
-      deleteMutation.mutate({ type: activeTab, id });
+      let key = id;
+      if (activeTab === 'departments') key = masterData.find((item: any) => item.id === id)?.dept_number || id;
+      else if (activeTab === 'users') key = masterData.find((item: any) => item.id === id)?.emp_code || id;
+      else if (activeTab === 'approval-matrix') key = masterData.find((item: any) => item.id === id)?.emp_code || id;
+      deleteMutation.mutate({ type: activeTab, id: key });
     }
   };
 
@@ -126,12 +130,9 @@ export default function AdminMasters() {
 
   const masterTabs = [
     { id: 'users', label: 'Users Master', icon: Users },
-    { id: 'entities', label: 'Entity Master', icon: Building },
     { id: 'departments', label: 'Department Master', icon: Building },
-    { id: 'locations', label: 'Location Master', icon: MapPin },
-    // { id: 'roles', label: 'Role Master', icon: Shield },
+    { id: 'sites', label: 'Site Master', icon: MapPin },
     { id: 'approval-matrix', label: 'Approval Matrix', icon: Settings },
-    { id: 'escalation-matrix', label: 'Escalation Matrix', icon: Settings },
     { id: 'inventory', label: 'Inventory Master', icon: Package },
     { id: 'vendors', label: 'Vendor Master', icon: Truck },
   ];
@@ -196,19 +197,9 @@ export default function AdminMasters() {
             { key: 'entity', label: 'Entity' },
             { key: 'location', label: 'Location' },
             { key: 'site', label: 'Site' },
-            // { key: 'role', label: 'Role' },
+            { key: 'role', label: 'Role' },
             { key: 'description', label: 'Description'},
             { key: 'erp_id', label: 'ERP ID'},
-          ])}
-
-          {renderMasterTable('entities', 'Entity Master', 'Manage business entities and organizational units', [
-            { key: 'code', label: 'Entity Code' },
-            { key: 'name', label: 'Entity Name' },
-            { key: 'description', label: 'Description' },
-            { key: 'parentEntity', label: 'Parent Entity' },
-            { key: 'isActive', label: 'Status', render: (value: boolean) => (
-              <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Active' : 'Inactive'}</Badge>
-            )},
           ])}
 
           {renderMasterTable('departments', 'Department Master', 'Manage organizational departments and their hierarchies', [
@@ -216,90 +207,79 @@ export default function AdminMasters() {
             { key: 'dept_name', label: 'Department Name' },
           ])}
 
-          {renderMasterTable('locations', 'Location Master', 'Manage office locations and geographical sites', [
-            { key: 'code', label: 'Location Code' },
-            { key: 'name', label: 'Location Name' },
-            { key: 'address', label: 'Address' },
-            { key: 'city', label: 'City' },
-            { key: 'state', label: 'State' },
-            { key: 'country', label: 'Country' },
-            { key: 'isActive', label: 'Status', render: (value: boolean) => (
-              <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Active' : 'Inactive'}</Badge>
-            )},
+          {renderMasterTable('sites', 'Site Master', 'Manage office sites and geographical locations', [
+            { key: 'Legal_Entity', label: 'Legal Entity' },
+            { key: 'Site_ID', label: 'Site Code' },
+            { key: 'Site_Name', label: 'Site Name' },
           ])}
-
-          {/* {renderMasterTable('roles', 'Role Master', 'Manage user roles and permission levels', [
-            { key: 'code', label: 'Role Code' },
-            { key: 'name', label: 'Role Name' },
-            { key: 'description', label: 'Description' },
-            { key: 'level', label: 'Authority Level' },
-            { key: 'permissions', label: 'Permissions', render: (value: string[]) => (
-              <div className="flex flex-wrap gap-1">
-                {value?.slice(0, 2).map((perm: string, idx: number) => (
-                  <Badge key={idx} variant="outline" className="text-xs">{perm}</Badge>
-                ))}
-                {value?.length > 2 && <Badge variant="outline" className="text-xs">+{value.length - 2}</Badge>}
-              </div>
-            )},
-            { key: 'isActive', label: 'Status', render: (value: boolean) => (
-              <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Active' : 'Inactive'}</Badge>
-            )},
-          ])} */}
 
           {renderMasterTable('approval-matrix', 'Approval Matrix', 'Defines the approval chain for specific requesters.', [
             { key: 'emp_code', label: 'Requester Code' },
             { key: 'name', label: 'Requester Name' },
-            { key: 'department', label: 'Department' },
+            { key: 'email', label: 'Requester Email', type: 'email' },
+            { key: 'mobile_no', label: 'Requester Mobile No' },
             { key: 'site', label: 'Site' },
+            { key: 'department', label: 'Department' },
             { key: 'approver_1_name', label: 'Approver 1 Name' },
-            { key: 'approver_1_email', label: 'Approver 1 Email' },
+            { key: 'approver_1_email', label: 'Approver 1 Email', type: 'email' },
             { key: 'approver_1_emp_code', label: 'Approver 1 Code' },
             { key: 'approver_2_name', label: 'Approver 2 Name' },
-            { key: 'approver_2_email', label: 'Approver 2 Email' },
+            { key: 'approver_2_email', label: 'Approver 2 Email', type: 'email' },
             { key: 'approver_2_emp_code', label: 'Approver 2 Code' },
             { key: 'approver_3a_name', label: 'Approver 3A Name' },
-            { key: 'approver_3a_email', label: 'Approver 3A Email' },
+            { key: 'approver_3a_email', label: 'Approver 3A Email', type: 'email' },
             { key: 'approver_3a_emp_code', label: 'Approver 3A Code' },
             { key: 'approver_3b_name', label: 'Approver 3B Name' },
-            { key: 'approver_3b_email', label: 'Approver 3B Email' },
+            { key: 'approver_3b_email', label: 'Approver 3B Email', type: 'email' },
             { key: 'approver_3b_emp_code', label: 'Approver 3B Code' },
           ])}
 
-          {renderMasterTable('escalation-matrix', 'Escalation Matrix', 'Configure escalation rules and timeframes', [
-            { key: 'site', label: 'Site/Entity' },
-            { key: 'location', label: 'Location' },
-            { key: 'escalationDays', label: 'Days to Escalate' },
-            { key: 'escalationLevel', label: 'Escalation Level' },
-            { key: 'approverName', label: 'Escalation Approver' },
-            { key: 'approverEmail', label: 'Approver Email' },
-            { key: 'isActive', label: 'Status', render: (value: boolean) => (
-              <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Active' : 'Inactive'}</Badge>
-            )},
-          ])}
-
           {renderMasterTable('inventory', 'Inventory Master', 'Manage inventory items and stock levels', [
-            { key: 'itemCode', label: 'Item Code' },
-            { key: 'type', label: 'Type' },
-            { key: 'name', label: 'Item Name' },
-            { key: 'quantity', label: 'Available Qty' },
-            { key: 'unitOfMeasure', label: 'UOM' },
-            { key: 'location', label: 'Storage Location' },
-            { key: 'isActive', label: 'Status', render: (value: boolean) => (
-              <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Active' : 'Inactive'}</Badge>
-            )},
+            { key: 'itemnumber', label: 'Item Number' },
+            { key: 'bomunitsymbol', label: 'BOM Unit Symbol' },
+            { key: 'inventoryreservationhierarchyname', label: 'Inventory Reservation Hierarchy Name' },
+            { key: 'inventoryunitsymbol', label: 'Inventory Unit Symbol' },
+            { key: 'iscatchweightproduct', label: 'Is Catch Weight Product', type: 'checkbox' },
+            { key: 'isproductkit', label: 'Is Product Kit', type: 'checkbox' },
+            { key: 'itemmodelgroupid', label: 'Item Model Group ID' },
+            { key: 'lowerwarrantablepricerangelimit', label: 'Lower Warrantable Price Range Limit', type: 'number' },
+            { key: 'productdescription', label: 'Product Description' },
+            { key: 'productdimensiongroupname', label: 'Product Dimension Group Name' },
+            { key: 'productgroupid', label: 'Product Group ID' },
+            { key: 'productname', label: 'Product Name' },
+            { key: 'productnumber', label: 'Product Number' },
+            { key: 'productsearchname', label: 'Product Search Name' },
+            { key: 'productsubtype', label: 'Product Subtype' },
+            { key: 'producttype', label: 'Product Type' },
+            { key: 'purchasesalestaxitemgroupcode', label: 'Purchase Sales Tax Item Group Code' },
+            { key: 'purchaseunitsymbol', label: 'Purchase Unit Symbol' },
+            { key: 'retailproductcategoryname', label: 'Retail Product Category Name' },
+            { key: 'salessalestaxitemgroupcode', label: 'Sales Sales Tax Item Group Code' },
+            { key: 'salesunitsymbol', label: 'Sales Unit Symbol' },
+            { key: 'searchname', label: 'Search Name' },
+            { key: 'servicetype', label: 'Service Type' },
+            { key: 'storagedimensiongroupname', label: 'Storage Dimension Group Name' },
+            { key: 'trackingdimensiongroupname', label: 'Tracking Dimension Group Name' },
+            { key: 'upperwarrantablepricerangelimit', label: 'Upper Warrantable Price Range Limit', type: 'number' },
+            { key: 'variantconfigurationtechnology', label: 'Variant Configuration Technology' },
+            { key: 'warrantablepricerangebasetype', label: 'Warrantable Price Range Base Type' },
+            { key: 'warrantydurationtime', label: 'Warranty Duration Time', type: 'number' },
+            { key: 'warrantydurationtimeunit', label: 'Warranty Duration Time Unit' },
           ])}
 
           {renderMasterTable('vendors', 'Vendor Master', 'Manage vendor information and details', [
-            { key: 'vendorCode', label: 'Vendor Code' },
-            { key: 'name', label: 'Vendor Name' },
-            { key: 'contactPerson', label: 'Contact Person' },
-            { key: 'email', label: 'Email' },
-            { key: 'phone', label: 'Phone' },
-            { key: 'category', label: 'Category' },
-            { key: 'paymentTerms', label: 'Payment Terms' },
-            { key: 'isActive', label: 'Status', render: (value: boolean) => (
-              <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Active' : 'Inactive'}</Badge>
-            )},
+            { key: 'vendoraccountnumber', label: 'Vendor Account Number' },
+            { key: 'vendororganizationname', label: 'Vendor Name' },
+            { key: 'addresscity', label: 'City' },
+            { key: 'addresscountryregionid', label: 'Country' },
+            { key: 'addressstateid', label: 'State' },
+            { key: 'addressstreet', label: 'Street' },
+            { key: 'addresszipcode', label: 'Zip Code' },
+            { key: 'currencycode', label: 'Currency' },
+            { key: 'pannumber', label: 'PAN Number' },
+            { key: 'panstatus', label: 'PAN Status' },
+            { key: 'vendorgroupid', label: 'Vendor Group' },
+            { key: 'vendorsearchname', label: 'Search Name' },
           ])}
         </Tabs>
 
@@ -432,7 +412,7 @@ function MasterTable({
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>
-                      <PaginationPrevious onClick={() => setCurrentPage(p => p - 1)} aria-disabled={!hasPrevious} className={!hasPrevious ? "pointer-events-none opacity-50" : ""}/>
+                      <PaginationPrevious onClick={() => setCurrentPage(currentPage - 1)} aria-disabled={!hasPrevious} className={!hasPrevious ? "pointer-events-none opacity-50" : ""}/>
                     </PaginationItem>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
                       <PaginationItem key={pageNum}>
@@ -442,7 +422,7 @@ function MasterTable({
                       </PaginationItem>
                     ))}
                     <PaginationItem>
-                      <PaginationNext onClick={() => setCurrentPage(p => p + 1)} aria-disabled={!hasNext} className={!hasNext ? "pointer-events-none opacity-50" : ""}/>
+                      <PaginationNext onClick={() => setCurrentPage(currentPage + 1)} aria-disabled={!hasNext} className={!hasNext ? "pointer-events-none opacity-50" : ""}/>
                     </PaginationItem>
                   </PaginationContent>
                 </Pagination>
@@ -477,77 +457,84 @@ function MasterForm({ type, editingItem, onClose }: { type: MasterType, editingI
       { key: 'entity', label: 'Entity' },
       { key: 'location', label: 'Location' },
       { key: 'site', label: 'Site' },
-      // { key: 'role', label: 'Role' },
+      { key: 'role', label: 'Role' },
       { key: 'description', label: 'Description'},
       { key: 'erp_id', label: 'ERP ID'},
-    ],
-    entities: [
-      { key: 'code', label: 'Entity Code' },
-      { key: 'name', label: 'Entity Name' },
-      { key: 'description', label: 'Description' },
-      { key: 'parentEntity', label: 'Parent Entity' },
-      { key: 'isActive', label: 'Active', type: 'checkbox' },
     ],
     departments: [
       { key: 'dept_number', label: 'Dept Number' },
       { key: 'dept_name', label: 'Department Name' },
     ],
-    locations: [
-      { key: 'code', label: 'Location Code' },
-      { key: 'name', label: 'Location Name' },
-      { key: 'address', label: 'Address' },
-      { key: 'city', label: 'City' },
-      { key: 'state', label: 'State' },
-      { key: 'country', label: 'Country' },
-      { key: 'isActive', label: 'Active', type: 'checkbox' },
+    sites: [
+      { key: 'Legal_Entity', label: 'Legal Entity' },
+      { key: 'Site_ID', label: 'Site Code' },
+      { key: 'Site_Name', label: 'Site Name' },
     ],
-    // roles: [
-    //   { key: 'code', label: 'Role Code' },
-    //   { key: 'name', label: 'Role Name' },
-    //   { key: 'description', label: 'Description' },
-    //   { key: 'level', label: 'Authority Level', type: 'number' },
-    //   { key: 'permissions', label: 'Permissions (comma separated)' },
-    //   { key: 'isActive', label: 'Active', type: 'checkbox' },
-    // ],
     'approval-matrix': [
       { key: 'emp_code', label: 'Requester Code' },
       { key: 'name', label: 'Requester Name' },
-      { key: 'department', label: 'Department' },
+      { key: 'email', label: 'Requester Email', type: 'email' },
+      { key: 'mobile_no', label: 'Requester Mobile No' },
       { key: 'site', label: 'Site' },
+      { key: 'department', label: 'Department' },
       { key: 'approver_1_name', label: 'Approver 1 Name' },
       { key: 'approver_1_email', label: 'Approver 1 Email', type: 'email' },
       { key: 'approver_1_emp_code', label: 'Approver 1 Code' },
       { key: 'approver_2_name', label: 'Approver 2 Name' },
       { key: 'approver_2_email', label: 'Approver 2 Email', type: 'email' },
       { key: 'approver_2_emp_code', label: 'Approver 2 Code' },
-    ],
-    'escalation-matrix': [
-      { key: 'site', label: 'Site/Entity' },
-      { key: 'location', label: 'Location' },
-      { key: 'escalationDays', label: 'Days to Escalate', type: 'number' },
-      { key: 'escalationLevel', label: 'Escalation Level', type: 'number' },
-      { key: 'approverName', label: 'Escalation Approver' },
-      { key: 'approverEmail', label: 'Approver Email', type: 'email' },
-      { key: 'isActive', label: 'Active', type: 'checkbox' },
+      { key: 'approver_3a_name', label: 'Approver 3A Name' },
+      { key: 'approver_3a_email', label: 'Approver 3A Email', type: 'email' },
+      { key: 'approver_3a_emp_code', label: 'Approver 3A Code' },
+      { key: 'approver_3b_name', label: 'Approver 3B Name' },
+      { key: 'approver_3b_email', label: 'Approver 3B Email', type: 'email' },
+      { key: 'approver_3b_emp_code', label: 'Approver 3B Code' },
     ],
     inventory: [
-      { key: 'itemCode', label: 'Item Code' },
-      { key: 'type', label: 'Type' },
-      { key: 'name', label: 'Item Name' },
-      { key: 'quantity', label: 'Available Qty', type: 'number' },
-      { key: 'unitOfMeasure', label: 'UOM' },
-      { key: 'location', label: 'Storage Location' },
-      { key: 'isActive', label: 'Active', type: 'checkbox' },
+      { key: 'itemnumber', label: 'Item Number' },
+      { key: 'bomunitsymbol', label: 'BOM Unit Symbol' },
+      { key: 'inventoryreservationhierarchyname', label: 'Inventory Reservation Hierarchy Name' },
+      { key: 'inventoryunitsymbol', label: 'Inventory Unit Symbol' },
+      { key: 'iscatchweightproduct', label: 'Is Catch Weight Product', type: 'checkbox' },
+      { key: 'isproductkit', label: 'Is Product Kit', type: 'checkbox' },
+      { key: 'itemmodelgroupid', label: 'Item Model Group ID' },
+      { key: 'lowerwarrantablepricerangelimit', label: 'Lower Warrantable Price Range Limit', type: 'number' },
+      { key: 'productdescription', label: 'Product Description' },
+      { key: 'productdimensiongroupname', label: 'Product Dimension Group Name' },
+      { key: 'productgroupid', label: 'Product Group ID' },
+      { key: 'productname', label: 'Product Name' },
+      { key: 'productnumber', label: 'Product Number' },
+      { key: 'productsearchname', label: 'Product Search Name' },
+      { key: 'productsubtype', label: 'Product Subtype' },
+      { key: 'producttype', label: 'Product Type' },
+      { key: 'purchasesalestaxitemgroupcode', label: 'Purchase Sales Tax Item Group Code' },
+      { key: 'purchaseunitsymbol', label: 'Purchase Unit Symbol' },
+      { key: 'retailproductcategoryname', label: 'Retail Product Category Name' },
+      { key: 'salessalestaxitemgroupcode', label: 'Sales Sales Tax Item Group Code' },
+      { key: 'salesunitsymbol', label: 'Sales Unit Symbol' },
+      { key: 'searchname', label: 'Search Name' },
+      { key: 'servicetype', label: 'Service Type' },
+      { key: 'storagedimensiongroupname', label: 'Storage Dimension Group Name' },
+      { key: 'trackingdimensiongroupname', label: 'Tracking Dimension Group Name' },
+      { key: 'upperwarrantablepricerangelimit', label: 'Upper Warrantable Price Range Limit', type: 'number' },
+      { key: 'variantconfigurationtechnology', label: 'Variant Configuration Technology' },
+      { key: 'warrantablepricerangebasetype', label: 'Warrantable Price Range Base Type' },
+      { key: 'warrantydurationtime', label: 'Warranty Duration Time', type: 'number' },
+      { key: 'warrantydurationtimeunit', label: 'Warranty Duration Time Unit' },
     ],
     vendors: [
-      { key: 'vendorCode', label: 'Vendor Code' },
-      { key: 'name', label: 'Vendor Name' },
-      { key: 'contactPerson', label: 'Contact Person' },
-      { key: 'email', label: 'Email', type: 'email' },
-      { key: 'phone', label: 'Phone' },
-      { key: 'category', label: 'Category' },
-      { key: 'paymentTerms', label: 'Payment Terms' },
-      { key: 'isActive', label: 'Active', type: 'checkbox' },
+      { key: 'vendoraccountnumber', label: 'Vendor Account Number' },
+      { key: 'vendororganizationname', label: 'Vendor Name' },
+      { key: 'addresscity', label: 'City' },
+      { key: 'addresscountryregionid', label: 'Country' },
+      { key: 'addressstateid', label: 'State' },
+      { key: 'addressstreet', label: 'Street' },
+      { key: 'addresszipcode', label: 'Zip Code' },
+      { key: 'currencycode', label: 'Currency' },
+      { key: 'pannumber', label: 'PAN Number' },
+      { key: 'panstatus', label: 'PAN Status' },
+      { key: 'vendorgroupid', label: 'Vendor Group' },
+      { key: 'vendorsearchname', label: 'Search Name' },
     ],
   };
 
@@ -560,7 +547,12 @@ function MasterForm({ type, editingItem, onClose }: { type: MasterType, editingI
         data.permissions = data.permissions.split(',').map(s => s.trim());
       }
       if (isEdit) {
-        return await apiRequest1('PUT', `/api/admin/masters/${type}/${editingItem.id}`, data);
+        let key;
+        if (type === 'users') key = editingItem.emp_code;
+        else if (type === 'departments') key = editingItem.dept_number;
+        else if (type === 'approval-matrix') key = editingItem.emp_code;
+        else key = editingItem.id;
+        return await apiRequest1('PUT', `/api/admin/masters/${type}/${key}`, data);
       } else {
         return await apiRequest1('POST', `/api/admin/masters/${type}`, data);
       }

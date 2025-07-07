@@ -186,8 +186,9 @@ export class DatabaseStorage implements IStorage {
     // Format: PR-Entity-KGBPL-YYYYMM-COUNTER
     const now = new Date();
     const year = now.getFullYear();
+    const date = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `PR-${entity}-KGBPL-${year}${month}`;
+    const prefix = `PR-${entity}-${year}${month}${date}`;
     // Find the max counter for this entity and year+month
     const lastPR = await this.prisma.purchase_requests.findFirst({
       where: {
