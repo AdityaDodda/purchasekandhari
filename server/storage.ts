@@ -94,7 +94,11 @@ export interface IStorage {
   generateRequisitionNumber(entity: string): Promise<string>;
 
   // Master Data operations for Admin system - NO PAGINATION
-  getAllUsers(search?: string): Promise<User[]>;
+  getAllUsers(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<User[]>;
   deleteUser(empCode: string): Promise<void>;
 
   getAllEntities(search?: string): Promise<Entity[]>;
@@ -102,7 +106,11 @@ export interface IStorage {
   updateEntity(id: number, entity: Partial<InsertEntity>): Promise<Entity>;
   deleteEntity(id: number): Promise<void>;
 
-  getAllDepartments(search?: string): Promise<Department[]>;
+  getAllDepartments(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Department[]>;
   createDepartment(department: InsertDepartment): Promise<Department>;
   updateDepartment(deptNumber: string, department: Partial<InsertDepartment>): Promise<Department>;
   deleteDepartment(deptNumber: string): Promise<void>;
@@ -112,7 +120,11 @@ export interface IStorage {
   updateLocation(id: number, location: Partial<InsertLocation>): Promise<Location>;
   deleteLocation(id: number): Promise<void>;
 
-  getAllApprovalMatrix(search?: string): Promise<ApprovalMatrix[]>;
+  getAllApprovalMatrix(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<ApprovalMatrix[]>;
   createApprovalMatrix(matrix: InsertApprovalMatrix): Promise<ApprovalMatrix>;
   updateApprovalMatrix(empCode: string, matrix: Partial<InsertApprovalMatrix>): Promise<ApprovalMatrix>;
   deleteApprovalMatrix(empCode: string): Promise<void>;
@@ -122,17 +134,29 @@ export interface IStorage {
   updateEscalationMatrix(id: number, matrix: Partial<InsertEscalationMatrix>): Promise<EscalationMatrix>;
   deleteEscalationMatrix(id: number): Promise<void>;
 
-  getAllInventory(search?: string): Promise<Inventory[]>;
+  getAllInventory(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Inventory[]>;
   createInventory(item: InsertInventory): Promise<Inventory>;
   updateInventory(itemNumber: string, item: UpdateInventory): Promise<Inventory>;
   deleteInventory(itemNumber: string): Promise<void>;
 
-  getAllVendors(search?: string): Promise<Vendor[]>;
+  getAllVendors(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Vendor[]>;
   createVendor(vendor: InsertVendor): Promise<Vendor>;
   updateVendor(vendorAccountNumber: string, vendor: UpdateVendor): Promise<Vendor>;
   deleteVendor(vendorAccountNumber: string): Promise<void>;
 
-  getAllSites(search?: string): Promise<Site[]>;
+  getAllSites(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Site[]>;
   createSite(site: InsertSite): Promise<Site>;
   updateSite(id: bigint, site: Partial<InsertSite>): Promise<Site>;
   deleteSite(id: bigint): Promise<void>;
@@ -324,14 +348,14 @@ export class DatabaseStorage implements IStorage {
       where.status = filters.status;
     }
     if (filters.department) {
-      where.department = filters.department;
+      where.department = { equals: filters.department, mode: 'insensitive' };
     }
     if (filters.location) {
       where.location = filters.location;
     }
     // Fetch requests
-    console.log('[DEBUG] getAllPurchaseRequests filters:', filters);
-    console.log('[DEBUG] getAllPurchaseRequests where clause:', where);
+    // console.log('getAllPurchaseRequests filters:', filters);
+    // console.log('getAllPurchaseRequests where clause:', where);
     const requests = await this.prisma.purchase_requests.findMany({
       where,
       orderBy: { created_at: 'desc' },
@@ -339,7 +363,7 @@ export class DatabaseStorage implements IStorage {
         line_items: true,
       },
     });
-    console.log('[DEBUG] getAllPurchaseRequests raw results count:', requests.length);
+    // console.log('getAllPurchaseRequests raw results count:', requests.length);
     // Fetch approval matrix for all relevant requester_emp_codes
     const empCodes = Array.from(new Set(requests.map((r: any) => r.requester_emp_code).filter(Boolean)));
     const approvalMatrices = await this.prisma.approval_matrix.findMany({
@@ -350,18 +374,18 @@ export class DatabaseStorage implements IStorage {
     let filteredRequests = requests;
     if (filters.approverEmpCode || filters.currentApproverId) {
       const approverId = filters.approverEmpCode || filters.currentApproverId;
-      console.log('[DEBUG] Filtering requests for approver:', approverId);
+      // console.log('Filtering requests for approver:', approverId);
       filteredRequests = requests.filter((req: any) => {
-        console.log('[DEBUG] Checking request:', req.pr_number, 'status:', req.status, 'current_approver:', req.current_approver_emp_code, 'level:', req.current_approval_level);
+        // console.log('Checking request:', req.pr_number, 'status:', req.status, 'current_approver:', req.current_approver_emp_code, 'level:', req.current_approval_level);
         
         // If status filter is 'pending', only show pending requests
         if (filters.status === 'pending' && req.status !== 'pending') {
-          console.log('[DEBUG] Filtering out non-pending request:', req.pr_number);
+          // console.log('Filtering out non-pending request:', req.pr_number);
           return false;
         }
         
         if (req.current_approver_emp_code === approverId) {
-          console.log('[DEBUG] Including request assigned to approver:', req.pr_number);
+          // console.log('Including request assigned to approver:', req.pr_number);
           return true;
         }
         
@@ -374,13 +398,13 @@ export class DatabaseStorage implements IStorage {
           (matrix.approver_3a_emp_code === approverId ||
             matrix.approver_3b_emp_code === approverId)
         ) {
-          console.log('[DEBUG] Including parallel approval request:', req.pr_number);
+          // console.log('Including parallel approval request:', req.pr_number);
           return true;
         }
-        console.log('[DEBUG] Filtering out request:', req.pr_number);
+        // console.log('Filtering out request:', req.pr_number);
         return false;
       });
-      console.log('[DEBUG] Filtered results count:', filteredRequests.length);
+      // console.log('Filtered results count:', filteredRequests.length);
     }
     // Map DB fields to API fields expected by frontend
     return filteredRequests.map((req: any) => ({
@@ -486,19 +510,29 @@ export class DatabaseStorage implements IStorage {
 
 // MASTER DATA IMPLEMENTATIONS
   // Users Master
-  async getAllUsers(search?: string): Promise<User[]> {
+  async getAllUsers(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<User[]> {
     const where: Prisma.usersWhereInput = search
       ? {
           OR: [
+            { emp_code: { contains: search, mode: 'insensitive' } },
             { name: { contains: search, mode: 'insensitive' } },
             { email: { contains: search, mode: 'insensitive' } },
-            { emp_code: { contains: search, mode: 'insensitive' } },
             { department: { contains: search, mode: 'insensitive' } },
+            { location: { contains: search, mode: 'insensitive' } },
             { role: { contains: search, mode: 'insensitive' } },
           ],
         }
       : {};
-    return this.prisma.users.findMany({ where, orderBy: { name: 'asc' } });
+    const allowedSortKeys = [
+      'emp_code', 'name', 'email', 'department', 'location', 'role', 'entity', 'site', 'erp_id'
+    ];
+    const finalSortKey = sortKey && allowedSortKeys.includes(sortKey) ? sortKey : 'emp_code';
+    const finalSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
+    return this.prisma.users.findMany({ where, orderBy: { [finalSortKey]: finalSortOrder } });
   }
 
   async deleteUser(empCode: string): Promise<void> {
@@ -520,7 +554,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Department Master
-  async getAllDepartments(search?: string): Promise<Department[]> {
+  async getAllDepartments(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Department[]> {
     const where: Prisma.departmentsWhereInput = search
       ? {
           OR: [
@@ -529,7 +567,10 @@ export class DatabaseStorage implements IStorage {
           ],
         }
       : {};
-    return this.prisma.departments.findMany({ where, orderBy: { dept_name: 'asc' } });
+    const allowedSortKeys = ['dept_number', 'dept_name'];
+    const finalSortKey = sortKey && allowedSortKeys.includes(sortKey) ? sortKey : 'dept_number';
+    const finalSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
+    return this.prisma.departments.findMany({ where, orderBy: { [finalSortKey]: finalSortOrder } });
   }
 
   async createDepartment(departmentData: InsertDepartment): Promise<Department> {
@@ -563,20 +604,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Approval Matrix
-  async getAllApprovalMatrix(search?: string): Promise<ApprovalMatrix[]> {
+  async getAllApprovalMatrix(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<ApprovalMatrix[]> {
     const where: Prisma.approval_matrixWhereInput = search
       ? {
           OR: [
-            { name: { contains: search, mode: 'insensitive' } },
             { emp_code: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
             { department: { contains: search, mode: 'insensitive' } },
             { site: { contains: search, mode: 'insensitive' } },
-            { approver_1_name: { contains: search, mode: 'insensitive' } },
-            { approver_1_email: { contains: search, mode: 'insensitive' } },
           ],
         }
       : {};
-    return this.prisma.approval_matrix.findMany({ where, orderBy: { name: 'asc' } });
+    const allowedSortKeys = [
+      'emp_code', 'name', 'email', 'department', 'site',
+      'approver_1_name', 'approver_1_emp_code', 'approver_2_name', 'approver_2_emp_code',
+      'approver_3a_name', 'approver_3a_emp_code', 'approver_3b_name', 'approver_3b_emp_code'
+    ];
+    const finalSortKey = sortKey && allowedSortKeys.includes(sortKey) ? sortKey : 'emp_code';
+    const finalSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
+    return this.prisma.approval_matrix.findMany({ where, orderBy: { [finalSortKey]: finalSortOrder } });
   }
 
   async createApprovalMatrix(matrixData: InsertApprovalMatrix): Promise<ApprovalMatrix> {
@@ -604,7 +655,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Inventory Master
-  async getAllInventory(search?: string): Promise<Inventory[]> {
+  async getAllInventory(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Inventory[]> {
     const where: Prisma.inventoryWhereInput = search
       ? {
           OR: [
@@ -616,7 +671,19 @@ export class DatabaseStorage implements IStorage {
           ],
         }
       : {};
-    return this.prisma.inventory.findMany({ where, orderBy: { itemnumber: 'asc' } });
+    const allowedSortKeys = [
+      'itemnumber', 'productname', 'productdescription', 'productnumber', 'searchname',
+      'bomunitsymbol', 'inventoryreservationhierarchyname', 'inventoryunitsymbol',
+      'iscatchweightproduct', 'isproductkit', 'itemmodelgroupid', 'lowerwarrantablepricerangelimit',
+      'productdimensiongroupname', 'productgroupid', 'productsearchname', 'productsubtype',
+      'producttype', 'purchasesalestaxitemgroupcode', 'purchaseunitsymbol', 'retailproductcategoryname',
+      'salessalestaxitemgroupcode', 'salesunitsymbol', 'servicetype', 'storagedimensiongroupname',
+      'trackingdimensiongroupname', 'upperwarrantablepricerangelimit', 'variantconfigurationtechnology',
+      'warrantablepricerangebasetype', 'warrantydurationtime', 'warrantydurationtimeunit'
+    ];
+    const finalSortKey = sortKey && allowedSortKeys.includes(sortKey) ? sortKey : 'itemnumber';
+    const finalSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
+    return this.prisma.inventory.findMany({ where, orderBy: { [finalSortKey]: finalSortOrder } });
   }
 
   async createInventory(itemData: InsertInventory): Promise<Inventory> {
@@ -639,7 +706,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Vendor Master
-  async getAllVendors(search?: string): Promise<Vendor[]> {
+  async getAllVendors(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Vendor[]> {
     const where: Prisma.vendorsWhereInput = search
       ? {
           OR: [
@@ -655,7 +726,15 @@ export class DatabaseStorage implements IStorage {
           ],
         }
       : {};
-    return this.prisma.vendors.findMany({ where, orderBy: { vendororganizationname: 'asc' } });
+    const finalSortKey = sortKey || 'vendororganizationname';
+    const finalSortOrder = sortOrder || 'asc';
+    const allowedSortKeys = [
+      'vendoraccountnumber', 'vendororganizationname', 'vendorsearchname', 'addresscity', 'addressstateid',
+      'addresszipcode', 'currencycode', 'pannumber', 'vendorgroupid'
+    ];
+    const safeSortKey = allowedSortKeys.includes(finalSortKey) ? finalSortKey : 'vendororganizationname';
+    const safeSortOrder = finalSortOrder === 'desc' ? 'desc' : 'asc';
+    return this.prisma.vendors.findMany({ where, orderBy: { [safeSortKey]: safeSortOrder } });
   }
 
   async createVendor(vendorData: InsertVendor): Promise<Vendor> {
@@ -678,15 +757,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Site Master
-  async getAllSites(search?: string): Promise<Site[]> {
+  async getAllSites(
+    search?: string,
+    sortKey?: string,
+    sortOrder?: 'asc' | 'desc'
+  ): Promise<Site[]> {
     const where: Prisma.sitesWhereInput = search
       ? {
           OR: [
             { Site_Name: { contains: search, mode: 'insensitive' } },
+            { Site_ID: { contains: search, mode: 'insensitive' } },
+            { Legal_Entity: { contains: search, mode: 'insensitive' } },
           ],
         }
       : {};
-    return this.prisma.sites.findMany({ where, orderBy: { Site_Name: 'asc' } });
+    const allowedSortKeys = ['Site_Name', 'Site_ID', 'Legal_Entity'];
+    const finalSortKey = sortKey && allowedSortKeys.includes(sortKey) ? sortKey : 'Site_Name';
+    const finalSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
+    return this.prisma.sites.findMany({ where, orderBy: { [finalSortKey]: finalSortOrder } });
   }
 
   async createSite(siteData: InsertSite): Promise<Site> {

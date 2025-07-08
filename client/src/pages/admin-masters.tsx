@@ -35,7 +35,7 @@ function exportToXLSX(data: any[], filename: string) {
   XLSX.writeFile(workbook, filename);
 }
 
-type MasterType = 'users' | 'entities' | 'departments' | 'locations' | /*'roles' |*/ 'approval-matrix' | 'escalation-matrix' | 'inventory' | 'vendors';
+type MasterType = 'users' | 'entities' | 'departments' | 'locations' | /*'roles' |*/ 'approval-matrix' | 'escalation-matrix' | 'inventory' | 'vendors' | 'sites';
 
 // Added missing properties to the interface
 interface MasterTableProps {
@@ -53,6 +53,10 @@ interface MasterTableProps {
   setCurrentPage: (page: number) => void;
   pageSize: number;
   totalItems: number;
+  sortKey: string;
+  setSortKey: (key: string) => void;
+  sortOrder: 'asc' | 'desc';
+  setSortOrder: (order: 'asc' | 'desc') => void;
 }
 
 export default function AdminMasters() {
@@ -61,6 +65,8 @@ export default function AdminMasters() {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortKey, setSortKey] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const pageSize = 10;
 
   const { toast } = useToast();
@@ -68,20 +74,20 @@ export default function AdminMasters() {
 
   useEffect(() => {
     setCurrentPage(1); 
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, sortKey, sortOrder]);
 
   const { data: apiResponse, isLoading } = useQuery<{ data: any[]; totalCount: number }>({
-    queryKey: ['adminMasters', activeTab, searchQuery, currentPage, pageSize], 
+    queryKey: ['adminMasters', activeTab, searchQuery, currentPage, pageSize, sortKey, sortOrder],
     queryFn: async ({ queryKey }) => {
-      const [_queryName, type, search, page, size] = queryKey as [string, string, string, number, number];
-      
+      const [_queryName, type, search, page, size, sortKey, sortOrder] = queryKey as [string, string, string, number, number, string, string];
       const params = new URLSearchParams();
       if (search) {
         params.append('search', search.toString());
       }
       params.append('page', page.toString());
       params.append('pageSize', size.toString());
-
+      if (sortKey) params.append('sortKey', sortKey);
+      if (sortOrder) params.append('sortOrder', sortOrder);
       const url = `/api/admin/masters/${type}?${params.toString()}`;
       return await apiRequest1('GET', url); 
     },
@@ -96,7 +102,7 @@ export default function AdminMasters() {
   const totalItems = apiResponse?.totalCount || 0;
 
   const deleteMutation = useMutation({
-    mutationFn: async ({ type, id }: { type: MasterType; id: number }) => {
+    mutationFn: async ({ type, id }: { type: MasterType; id: string | number }) => {
       await apiRequest1('DELETE', `/api/admin/masters/${type}/${id}`);
     },
     onSuccess: () => {
@@ -154,6 +160,10 @@ export default function AdminMasters() {
         setCurrentPage={setCurrentPage}
         pageSize={pageSize}
         totalItems={totalItems}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortOrder={sortOrder}
+        setSortOrder={setSortOrder}
       />
     </TabsContent>
   );
@@ -321,11 +331,24 @@ function MasterTable({
   setCurrentPage,
   pageSize,
   totalItems,
+  sortKey,
+  setSortKey,
+  sortOrder,
+  setSortOrder,
 }: MasterTableProps) {
   
   const totalPages = Math.ceil(totalItems / pageSize);
   const hasPrevious = currentPage > 1;
   const hasNext = currentPage < totalPages;
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
 
   return (
     <Card>
@@ -367,12 +390,26 @@ function MasterTable({
               <thead className="bg-gray-50">
                 <tr>
                   {columns.map((column) => (
-                    <th key={column.key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {column.label}
+                    <th
+                      key={column.key}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none border border-gray-300"
+                      onClick={() => handleSort(column.key)}>
+                      <span className="flex items-center">
+                        <span className="font-bold">{column.label}</span>
+                        {/* Always show arrows, highlight if active */}
+                        <span className="ml-2 flex flex-col text-xs">
+                          <span style={{ color: sortKey === column.key && sortOrder === 'asc' ? '#1d4ed8' : '#a3a3a3', fontWeight: sortKey === column.key && sortOrder === 'asc' ? 'bold' : 'normal', lineHeight: 1 }}>
+                            ▲
+                          </span>
+                          <span style={{ color: sortKey === column.key && sortOrder === 'desc' ? '#1d4ed8' : '#a3a3a3', fontWeight: sortKey === column.key && sortOrder === 'desc' ? 'bold' : 'normal', lineHeight: 1 }}>
+                            ▼
+                          </span>
+                        </span>
+                      </span>
                     </th>
                   ))}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    <span className="border border-gray-300 block px-0 py-0">Actions</span>
                   </th>
                 </tr>
               </thead>

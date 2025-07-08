@@ -23,12 +23,14 @@ import {
 import { Comments } from "@/components/ui/comments";
 import { AuditLog } from "@/components/ui/audit-log";
 import { ApprovalProgress } from "@/components/ui/approval-progress";
+import { Textarea } from "@/components/ui/textarea";
+import type { User } from "@/lib/types";
 
-type User = {
-  id: string;
-  role: string;
-  emp_code: string;
-};
+// type User = {
+//   id: string;
+//   role: string;
+//   emp_code: string;
+// };
 
 // Add types for stats and requests
 interface DashboardStats {
@@ -58,6 +60,8 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [selectedRequester, setSelectedRequester] = useState<any>(null);
+  const [comment, setComment] = useState("");
+  const [editMode, setEditMode] = useState<null | 'approve' | 'reject' | 'return'>(null);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
@@ -496,88 +500,129 @@ export default function Dashboard() {
                             selectedRequest.approvalMatrix.approver_3b_emp_code === user.emp_code)
                         )
                       ) && (
-                        <div className="flex gap-2 mt-4">
-                          <Button
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                            onClick={async () => {
-                              const comment = prompt("Enter approval comments (required):");
-                              if (comment === null || comment.trim() === "") {
-                                alert("Approval comment is required.");
-                                return;
-                              }
-                              try {
-                                await fetch(`/api/purchase-requests/${selectedRequest.id}/approve`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ comment }),
-                                  credentials: 'include',
-                                });
-                                alert('Request approved!');
-                                setShowDetailsModal(false);
-                                // Invalidate queries to refresh the data
-                                queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
-                                queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-                              } catch (e) {
-                                alert('Failed to approve request.');
-                              }
-                            }}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            className="bg-blue-500 text-white"
-                            onClick={async () => {
-                              const comment = prompt("Enter return comment (required):");
-                              if (comment === null || comment.trim() === "") {
-                                alert("Return comment is required.");
-                                return;
-                              }
-                              try {
-                                await fetch(`/api/purchase-requests/${selectedRequest.id}/return`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ comment }),
-                                  credentials: 'include',
-                                });
-                                alert('Request returned!');
-                                setShowDetailsModal(false);
-                                // Invalidate queries to refresh the data
-                                queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
-                                queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-                              } catch (e) {
-                                alert('Failed to return request.');
-                              }
-                            }}
-                          >
-                            Return
-                          </Button>
-                          <Button
-                            className="bg-orange-600 text-white"
-                            onClick={async () => {
-                              const comment = prompt("Enter rejection reason (required):");
-                              if (comment === null || comment.trim() === "") {
-                                alert("Rejection reason is required.");
-                                return;
-                              }
-                              try {
-                                await fetch(`/api/purchase-requests/${selectedRequest.id}/reject`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ comment }),
-                                  credentials: 'include',
-                                });
-                                alert('Request rejected!');
-                                setShowDetailsModal(false);
-                                // Invalidate queries to refresh the data
-                                queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
-                                queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-                              } catch (e) {
-                                alert('Failed to reject request.');
-                              }
-                            }}
-                          >
-                            Reject
-                          </Button>
+                        <div className="mt-6">
+                          <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">Comment</label>
+                          <Textarea
+                            id="comment"
+                            value={comment}
+                            onChange={e => setComment(e.target.value)}
+                            placeholder="Enter your comment here..."
+                            disabled={!editMode}
+                            className="mb-4"
+                          />
+                          {editMode === null ? (
+                            <div className="flex gap-2">
+                              <Button
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => setEditMode('approve')}
+                                disabled={selectedRequest.status !== 'pending'}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                className="bg-blue-500 text-white"
+                                onClick={() => setEditMode('return')}
+                                disabled={selectedRequest.status !== 'pending'}
+                              >
+                                Return
+                              </Button>
+                              <Button
+                                className="bg-orange-600 text-white"
+                                onClick={() => setEditMode('reject')}
+                                disabled={selectedRequest.status !== 'pending'}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              {editMode === 'approve' && (
+                                <Button
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={async () => {
+                                    // Approve logic
+                                    if (!comment.trim()) {
+                                      setEditMode('approve');
+                                      return;
+                                    }
+                                    try {
+                                      await fetch(`/api/purchase-requests/${selectedRequest.id}/approve`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ comment }),
+                                        credentials: 'include',
+                                      });
+                                      setShowDetailsModal(false);
+                                      queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
+                                      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+                                    } catch (e) {}
+                                    setEditMode(null);
+                                  }}
+                                  disabled={selectedRequest.status !== 'pending'}
+                                >
+                                  Submit Approve
+                                </Button>
+                              )}
+                              {editMode === 'return' && (
+                                <Button
+                                  className="bg-blue-500 text-white"
+                                  onClick={async () => {
+                                    if (!comment.trim()) {
+                                      setEditMode('return');
+                                      return;
+                                    }
+                                    try {
+                                      await fetch(`/api/purchase-requests/${selectedRequest.id}/return`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ comment }),
+                                        credentials: 'include',
+                                      });
+                                      setShowDetailsModal(false);
+                                      queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
+                                      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+                                    } catch (e) {}
+                                    setEditMode(null);
+                                  }}
+                                  disabled={selectedRequest.status !== 'pending'}
+                                >
+                                  Submit Return
+                                </Button>
+                              )}
+                              {editMode === 'reject' && (
+                                <Button
+                                  className="bg-orange-600 text-white"
+                                  onClick={async () => {
+                                    if (!comment.trim()) {
+                                      setEditMode('reject');
+                                      return;
+                                    }
+                                    try {
+                                      await fetch(`/api/purchase-requests/${selectedRequest.id}/reject`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ comment }),
+                                        credentials: 'include',
+                                      });
+                                      setShowDetailsModal(false);
+                                      queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
+                                      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+                                    } catch (e) {}
+                                    setEditMode(null);
+                                  }}
+                                  disabled={selectedRequest.status !== 'pending'}
+                                >
+                                  Submit Reject
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                onClick={() => setEditMode(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )
                     )}

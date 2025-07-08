@@ -41,6 +41,16 @@ export default function AdminReports() {
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["/api/reports/purchase-requests", filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.status && filters.status !== "all") params.append("status", filters.status);
+      if (filters.department && filters.department !== "all") params.append("department", filters.department);
+      if (filters.location && filters.location !== "all") params.append("location", filters.location);
+      if (filters.requester && filters.requester !== "all") params.append("createdBy", filters.requester);
+      const res = await fetch(`/api/reports/purchase-requests?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   });
   const { data: requestDetails, isLoading: isLoadingDetails } = useQuery<any>({
     queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],
@@ -50,7 +60,12 @@ export default function AdminReports() {
     queryKey: ["/api/admin/users"],
   });
   const { data: departments } = useQuery({
-    queryKey: ["/api/admin/masters/departments"],
+    queryKey: ["/api/admin/masters/departments", { page: 1, pageSize: 100 }],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/masters/departments?page=1&pageSize=100`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   });
   const { data: locations } = useQuery<string[]>({
     queryKey: ["/api/admin/reports/locations"],
@@ -101,15 +116,7 @@ export default function AdminReports() {
   };
   const filteredRequests = Array.isArray(requests)
     ? requests.filter((req: any) => {
-        if (filters.status !== "all" && req.status !== filters.status) return false;
-        if (filters.department !== "all" && req.department !== filters.department) return false;
-        if (filters.location !== "all" && req.location !== filters.location) return false;
-        if (
-          filters.requester !== "all" &&
-          ![req.requester?.id?.toString(), req.requester?.emp_code, req.requesterId, req.requester]
-            .filter(Boolean)
-            .includes(filters.requester)
-        ) return false;
+        // Only keep client-side filtering for search and date range
         if (filters.search) {
           const search = filters.search.toLowerCase();
           const matches =
@@ -243,8 +250,8 @@ export default function AdminReports() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Departments</SelectItem>
-                    {Array.isArray(departments) && departments.map((dept: any) => (
-                      <SelectItem key={dept.dept_number || dept.id || dept.value} value={dept.dept_name || dept.value}>{dept.dept_name || dept.label}</SelectItem>
+                    {Array.isArray((departments && departments.data) ? departments.data : []) && ((departments && departments.data) ? departments.data : []).map((dept: any) => (
+                      <SelectItem key={dept.dept_number || dept.id || dept.value} value={dept.dept_name}>{dept.dept_name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

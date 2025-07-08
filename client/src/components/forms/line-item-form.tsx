@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react"; // Added useEffect
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,13 +9,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LOCATIONS, UNITS_OF_MEASURE } from "@/lib/constants";
-import type { LineItemFormData } from "@/lib/types";
+// Assuming these are correctly defined:
+import { LOCATIONS, UNITS_OF_MEASURE } from "@/lib/constants"; 
+import type { LineItemFormData } from "@/lib/types"; // Your type definition
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils"; // Assuming this is correctly implemented
 import { useQuery } from "@tanstack/react-query";
 
+// Define a Zod schema for the Vendor type
+const vendorSchema = z.object({
+  vendoraccountnumber: z.string().min(1, "Vendor account number is required"),
+  vendorsearchname: z.string().min(1, "Vendor name is required"),
+  vendororganizationname: z.string().optional(),
+});
+
+// Update the lineItemSchema to include the vendor field
 const lineItemSchema = z.object({
   itemName: z.string().min(1, "Item name is required"),
   requiredQuantity: z.number().min(1, "Quantity must be at least 1"),
@@ -24,6 +33,7 @@ const lineItemSchema = z.object({
   deliveryLocation: z.string().min(1, "Delivery location is required"),
   estimatedCost: z.number().min(0.01, "Estimated cost must be greater than 0"),
   itemJustification: z.string().optional(),
+  vendor: vendorSchema.nullable().optional(), // Added vendor schema, allowing null or undefined
 });
 
 interface LineItemFormProps {
@@ -32,7 +42,7 @@ interface LineItemFormProps {
 
 // Indian currency formatting function (copied from purchase-request-form.tsx)
 const formatIndianCurrency = (amount: number | string) => {
-  if (!amount && amount !== 0) return "₹0.00";
+  if (amount === null || amount === undefined || amount === "") return "₹0.00";
   const num = parseFloat(amount.toString());
   if (isNaN(num)) return "₹0.00";
   const numStr = num.toFixed(2);
@@ -59,10 +69,17 @@ const formatIndianCurrency = (amount: number | string) => {
 };
 
 export function LineItemForm({ onAddItem }: LineItemFormProps) {
-  console.log("LineItemForm rendered");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false); // Controls Dialog open/close
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // State for Inventory search/autocomplete
   const [itemSearch, setItemSearch] = useState("");
+
+  // State for Vendor search/autocomplete
+  const [vendorSearchTerm, setVendorSearchTerm] = useState("");
+  const [highlightedVendorIndex, setHighlightedVendorIndex] = useState<number>(-1);
+  const vendorInputRef = useRef<HTMLInputElement>(null);
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false);
 
   const {
     register,
@@ -73,7 +90,28 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
     getValues,
   } = useForm<LineItemFormData>({
     resolver: zodResolver(lineItemSchema),
+    defaultValues: { // Initialize all fields, especially vendor
+      itemName: "",
+      requiredQuantity: 0,
+      unitOfMeasure: "",
+      requiredByDate: "",
+      deliveryLocation: "",
+      estimatedCost: 0,
+      itemJustification: "",
+      vendor: null, // Default to null for vendor
+    },
   });
+
+  // Reset form and search states when dialog is opened/closed
+  useEffect(() => {
+    if (!open) {
+      reset(); // Resets all react-hook-form fields to defaultValues
+      setItemSearch(""); // Reset item search
+      setVendorSearchTerm(""); // Reset vendor search
+      setHighlightedVendorIndex(-1); // Reset vendor highlight
+      setShowVendorDropdown(false); // Close vendor dropdown
+    }
+  }, [open, reset]);
 
   // Fetch inventory as user types
   const { data: inventory = [] } = useQuery({
@@ -82,15 +120,30 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
       const res = await fetch(`/api/inventory?search=${encodeURIComponent(itemSearch || "")}`);
       return res.json();
     },
+    enabled: !!itemSearch, // Only fetch if there's a search term
+    staleTime: 30 * 1000,
   });
 
-  // Fetch vendor search names for dropdown
-  const { data: vendors = [] } = useQuery({
-    queryKey: ["vendor-searchnames"],
+  // Fetch all vendors (for initial browse or fallback for keyboard nav when search term is empty)
+  const { data: allVendors = [] } = useQuery({
+    queryKey: ["vendor-searchnames-all"],
     queryFn: async () => {
-      const res = await fetch("/api/vendors/searchnames");
+      const res = await fetch(`/api/vendors/searchnames`);
       return res.json();
     },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch vendor search results based on vendorSearchTerm
+  const { data: vendorSearchResults = [] } = useQuery({
+    queryKey: ["vendor-autocomplete", vendorSearchTerm],
+    queryFn: async () => {
+      if (!vendorSearchTerm) return [];
+      const res = await fetch(`/api/vendors/searchnames?search=${encodeURIComponent(vendorSearchTerm)}`);
+      return res.json();
+    },
+    enabled: !!vendorSearchTerm, // Only fetch if there's a search term
+    staleTime: 30 * 1000,
   });
 
   // Helper to filter inventory for dropdown (includes, case-insensitive)
@@ -101,18 +154,23 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
       )
     : [];
 
-  // Debug log
-  console.log("Inventory:", inventory, "Filtered:", filteredInventory, "Search:", itemSearch);
-
-  // Helper to parse dd-mm-yyyy to Date or undefined
+  // Helper to parse dd-mm-yyyy string to Date object or undefined
   function parseDDMMYYYYOrUndefined(dateStr: string): Date | undefined {
     if (!dateStr) return undefined;
-    const [day, month, year] = dateStr.split("-");
-    if (!day || !month || !year) return undefined;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return undefined;
+    const [day, month, year] = parts.map(Number);
+    if (isNaN(day) || isNaN(month) || isNaN(year)) return undefined;
+    // Month is 0-indexed in Date constructor
+    const date = new Date(year, month - 1, day);
+    // Validate if the date components actually match (e.g., 31-02-2023 would become Mar 2)
+    if (date.getDate() !== day || date.getMonth() !== month - 1 || date.getFullYear() !== year) {
+        return undefined;
+    }
+    return date;
   }
 
-  // Helper to format Date to dd-mm-yyyy
+  // Helper to format Date object to dd-mm-yyyy string
   function formatToDDMMYYYY(date: Date | null): string {
     if (!date) return "";
     const day = date.getDate().toString().padStart(2, "0");
@@ -123,8 +181,8 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
 
   const onSubmit = (data: LineItemFormData) => {
     onAddItem(data);
-    reset();
-    setOpen(false);
+    // The useEffect will handle reset when `setOpen(false)` is called
+    setOpen(false); 
   };
 
   return (
@@ -146,13 +204,14 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
               <div className="relative">
                 <Input
                   id="itemName"
+                  // Let react-hook-form manage the input value
                   {...register("itemName")}
                   placeholder="Search or enter item name"
                   className="pr-10"
-                  value={itemSearch || getValues("itemName")}
                   onChange={e => {
+                    // Update itemSearch for the autocomplete query
                     setItemSearch(e.target.value);
-                    setValue("itemName", e.target.value);
+                    // No need to call setValue("itemName", e.target.value) here as register handles it
                   }}
                   autoComplete="off"
                 />
@@ -164,10 +223,10 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                       <div
                         key={item.itemnumber}
                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onClick={() => {
-                          setValue("itemName", item.productname || item.itemnumber);
-                          setValue("unitOfMeasure", item.bomunitsymbol || "");
-                          setItemSearch(item.productname || item.itemnumber);
+                        onMouseDown={() => { // Use onMouseDown to prevent onBlur from closing dropdown
+                          setValue("itemName", item.productname || item.itemnumber, { shouldValidate: true });
+                          setValue("unitOfMeasure", item.bomunitsymbol || "", { shouldValidate: true });
+                          setItemSearch(item.productname || item.itemnumber); // Update itemSearch to reflect selection
                         }}
                       >
                         <div className="font-medium">{item.productname || item.itemnumber}</div>
@@ -185,33 +244,96 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
               )}
             </div>
 
-            {/* Vendor Dropdown */}
+            {/* Vendor Search Input - Corrected Logic */}
             <div>
               <Label htmlFor="vendor">Vendor</Label>
-              <Select
-                onValueChange={val => {
-                  const selected = vendors.find((v: any) => v.vendoraccountnumber === val);
-                  setValue("vendor", selected || null, { shouldValidate: true });
-                }}
-                value={getValues("vendor")?.vendoraccountnumber || ""}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Vendor (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vendors.map((vendor: any) => (
-                    <SelectItem key={vendor.vendoraccountnumber} value={vendor.vendoraccountnumber}>
-                      <div>
-                        <span className="font-medium">{vendor.vendorsearchname}</span>
-                        {vendor.vendororganizationname && (
-                          <span className="ml-2 text-xs text-gray-500">({vendor.vendororganizationname})</span>
-                        )}
-                        <span className="ml-2 text-xs text-gray-400">[{vendor.vendoraccountnumber}]</span>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="vendor"
+                  ref={vendorInputRef}
+                  placeholder="Search or enter vendor name (optional)"
+                  value={vendorSearchTerm} // Input value controlled by vendorSearchTerm state
+                  onFocus={() => setShowVendorDropdown(true)}
+                  // Delay closing to allow click events on dropdown items to register
+                  onBlur={() => setTimeout(() => setShowVendorDropdown(false), 150)}
+                  onChange={e => {
+                    const newValue = e.target.value;
+                    setVendorSearchTerm(newValue);
+                    // If the user types and the new value doesn't match the currently selected vendor's name,
+                    // clear the selected vendor from react-hook-form state.
+                    if (getValues("vendor")?.vendorsearchname !== newValue) {
+                      setValue("vendor", null, { shouldValidate: true });
+                    }
+                    setHighlightedVendorIndex(-1); // Reset highlight when typing
+                    setShowVendorDropdown(true); // Ensure dropdown is shown when typing
+                  }}
+                  onKeyDown={e => {
+                    const list = vendorSearchTerm.length > 0 ? vendorSearchResults : allVendors;
+                    if (list.length === 0) return; // No items to navigate
+
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setHighlightedVendorIndex(idx => (idx + 1) % list.length);
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setHighlightedVendorIndex(idx => (idx - 1 + list.length) % list.length);
+                    } else if (e.key === "Enter") {
+                      if (highlightedVendorIndex >= 0 && highlightedVendorIndex < list.length) {
+                        const vendor = list[highlightedVendorIndex];
+                        setValue("vendor", vendor, { shouldValidate: true });
+                        setVendorSearchTerm(vendor.vendorsearchname); // Update input field to selected name
+                        setHighlightedVendorIndex(-1);
+                        setShowVendorDropdown(false);
+                        vendorInputRef.current?.blur(); // Blur the input after selection
+                      } else {
+                        // If Enter is pressed without a highlighted item
+                        // or if no search results for current term, keep form.vendor as null
+                        // and just close dropdown.
+                        setShowVendorDropdown(false);
+                        vendorInputRef.current?.blur();
+                      }
+                    } else if (e.key === "Escape") {
+                      setShowVendorDropdown(false);
+                      vendorInputRef.current?.blur();
+                    }
+                  }}
+                  className="pl-10"
+                  autoComplete="off"
+                />
+                {/* Vendor Dropdown */}
+                {showVendorDropdown && (
+                    (vendorSearchTerm.length > 0 && vendorSearchResults.length > 0) ||
+                    (vendorSearchTerm.length === 0 && allVendors.length > 0)
+                ) && (
+                  <div className="border rounded-md max-h-48 overflow-y-auto mb-2 bg-white shadow-sm absolute z-10 w-full">
+                    {(vendorSearchTerm.length > 0 ? vendorSearchResults : allVendors).map((vendor: any, idx: number) => (
+                      <div
+                        key={vendor.vendoraccountnumber}
+                        className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${highlightedVendorIndex === idx ? "bg-blue-100" : ""}`}
+                        onMouseEnter={() => setHighlightedVendorIndex(idx)}
+                        onMouseLeave={() => setHighlightedVendorIndex(-1)}
+                        onMouseDown={(e) => { // Use onMouseDown to prevent onBlur from closing dialog too early
+                          e.preventDefault(); // Prevent input from losing focus immediately
+                          setValue("vendor", vendor, { shouldValidate: true });
+                          setVendorSearchTerm(vendor.vendorsearchname); // Update input field to selected name
+                          setHighlightedVendorIndex(-1);
+                          setShowVendorDropdown(false);
+                          vendorInputRef.current?.blur(); // Manually blur after selection
+                        }}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium">{vendor.vendorsearchname}</span>
+                          <span className="text-sm text-gray-500">
+                            {vendor.vendororganizationname && `Org: ${vendor.vendororganizationname} `}
+                            [{vendor.vendoraccountnumber}]
+                          </span>
+                        </div>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
@@ -261,10 +383,10 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                     mode="single"
                     selected={parseDDMMYYYYOrUndefined(getValues("requiredByDate"))}
                     onSelect={(date) => {
-                      setValue("requiredByDate", formatToDDMMYYYY(date ?? null));
+                      setValue("requiredByDate", formatToDDMMYYYY(date ?? null), { shouldValidate: true });
                       setCalendarOpen(false);
                     }}
-                    fromDate={new Date()}
+                    fromDate={new Date()} // Prevent selecting past dates
                   />
                 </PopoverContent>
               </Popover>
@@ -276,7 +398,7 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
 
             <div>
               <Label htmlFor="deliveryLocation">Delivery Location *</Label>
-              <Select onValueChange={(value) => setValue("deliveryLocation", value)}>
+              <Select onValueChange={(value) => setValue("deliveryLocation", value, { shouldValidate: true })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select Location" />
                 </SelectTrigger>

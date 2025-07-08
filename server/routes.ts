@@ -1012,7 +1012,16 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/reports/purchase-requests', requireAuth, async (req: any, res) => {
     try {
-      const requests = await storage.getAllPurchaseRequests();
+      // Extract filters from query params (same as /api/purchase-requests)
+      const filters: any = {};
+      if (req.query.createdBy) filters.createdBy = req.query.createdBy;
+      if (req.query.currentApproverId) filters.currentApproverId = req.query.currentApproverId;
+      if (req.query.approverEmpCode) filters.approverEmpCode = req.query.approverEmpCode;
+      if (req.query.status) filters.status = req.query.status;
+      if (req.query.department) filters.department = req.query.department;
+      if (req.query.location) filters.location = req.query.location;
+      // Add more filters as needed
+      const requests = await storage.getAllPurchaseRequests(filters);
       res.json(requests);
     } catch (error) {
       console.error('Error fetching reports data:', error);
@@ -1034,29 +1043,32 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/admin/masters/:type', requireAuth, requireRole(['admin']), async (req: any, res) => {
     try {
       const { type } = req.params;
-      const search = (req.query.search as string) || '';
+      const search = req.query.search as string || '';
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.pageSize as string) || 10;
+      const sortKey = req.query.sortKey as string || '';
+      const sortOrderParam = (req.query.sortOrder as string || 'asc').toLowerCase();
+      const sortOrder: 'asc' | 'desc' = sortOrderParam === 'desc' ? 'desc' : 'asc';
       let result;
       switch (type) {
         case 'users':
-          result = await storage.getAllUsers(search);
+          result = await storage.getAllUsers(search, sortKey, sortOrder);
           break;
         case 'departments':
-          result = await storage.getAllDepartments(search);
+          result = await storage.getAllDepartments(search, sortKey, sortOrder);
           break;
         case 'sites':
-          result = await storage.getAllSites(search);
+          result = await storage.getAllSites(search, sortKey, sortOrder);
           result = result.map(site => ({ ...site, id: site.id.toString() }));
           break;
         case 'approval-matrix':
-          result = await storage.getAllApprovalMatrix(search);
+          result = await storage.getAllApprovalMatrix(search, sortKey, sortOrder);
           break;
         case 'inventory':
-          result = await storage.getAllInventory(search);
+          result = await storage.getAllInventory(search, sortKey, sortOrder);
           break;
         case 'vendors':
-          result = await storage.getAllVendors(search);
+          result = await storage.getAllVendors(search, sortKey, sortOrder);
           break;
         default:
           console.warn(`WARN: GET request for unimplemented master type: ${type}`);
@@ -1085,10 +1097,16 @@ export function registerRoutes(app: Express): Server {
   // Vendor searchnames for dropdown
   app.get('/api/vendors/searchnames', requireAuth, async (req, res) => {
     try {
+      const search = req.query.search ? String(req.query.search).toLowerCase() : "";
       const vendors = await storage.getAllVendors();
-      // Only return non-empty vendorsearchname, sorted alphabetically
+      // Only return non-empty vendorsearchname, sorted alphabetically, and filter by search if provided
       const filtered = vendors
-        .filter(v => v.vendorsearchname && v.vendorsearchname.trim() !== "")
+        .filter(v => typeof v.vendorsearchname === 'string' && v.vendorsearchname.trim() !== "")
+        .filter(v =>
+          !search ||
+          (typeof v.vendorsearchname === 'string' && v.vendorsearchname.toLowerCase().includes(search)) ||
+          (typeof v.vendororganizationname === 'string' && v.vendororganizationname.toLowerCase().includes(search))
+        )
         .sort((a, b) => (a.vendorsearchname || '').localeCompare(b.vendorsearchname || ''))
         .map(v => ({
           vendorsearchname: v.vendorsearchname,

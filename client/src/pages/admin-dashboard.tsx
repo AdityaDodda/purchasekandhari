@@ -21,6 +21,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {Pagination,PaginationContent,PaginationItem,PaginationLink,PaginationPrevious,PaginationNext,} from "@/components/ui/pagination";
 import { ApprovalProgress } from "@/components/ui/approval-progress";
+import { Textarea } from "@/components/ui/textarea";
+import type { User } from "@/lib/types";
 
 // Added the exportToXLSX utility function outside the component
 function exportToXLSX(data: any[], filename: string) {
@@ -65,12 +67,20 @@ export default function AdminDashboard() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+  const [comment, setComment] = useState("");
+  const [editMode, setEditMode] = useState<null | 'approve' | 'reject' | 'return'>(null);
 
   const { data: stats } = useQuery({
     queryKey: ["/api/dashboard/stats"],
   });
    const { data: departments } = useQuery({
-    queryKey: ["/api/admin/masters/departments"],
+    queryKey: ["/api/admin/masters/departments", { page: 1, pageSize: 100 }],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/masters/departments?page=1&pageSize=100`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   });
   const { data: locations } = useQuery<string[]>({
     queryKey: ["/api/admin/reports/locations"],
@@ -224,22 +234,26 @@ export default function AdminDashboard() {
   });
 
   const handleApproveRequest = (id: number) => {
-    const comment = prompt("Enter approval comments (optional):");
     approveMutation.mutate({ id, comment: comment || undefined });
+    setEditMode(null);
   };
 
   const handleRejectRequest = (id: number) => {
-    const comment = prompt("Enter rejection reason:");
-    if (comment) {
-      rejectMutation.mutate({ id, comment });
+    if (!comment) {
+      toast({ title: "Error", description: "Rejection reason is required.", variant: "destructive" });
+      return;
     }
+    rejectMutation.mutate({ id, comment });
+    setEditMode(null);
   };
 
   const handleReturnRequest = (id: number) => {
-    const comment = prompt("Enter return comments (required for user to understand what needs to be changed):");
-    if (comment) {
-      returnMutation.mutate({ id, comment });
+    if (!comment) {
+      toast({ title: "Error", description: "Return comment is required.", variant: "destructive" });
+      return;
     }
+    returnMutation.mutate({ id, comment });
+    setEditMode(null);
   };
 
   if (isLoading) {
@@ -301,8 +315,8 @@ export default function AdminDashboard() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Departments</SelectItem>
-                    {Array.isArray(departments) && departments.map((dept: any) => (
-                      <SelectItem key={dept.dept_number || dept.id || dept.value} value={dept.dept_name || dept.value}>{dept.dept_name || dept.label}</SelectItem>
+                    {Array.isArray(departments?.data) && departments.data.map((dept: any) => (
+                      <SelectItem key={dept.dept_number} value={dept.dept_name}>{dept.dept_name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -424,7 +438,11 @@ export default function AdminDashboard() {
                           })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{request.department}</div>
+                          <div className="text-sm text-gray-900">{
+                            Array.isArray(departments?.data)
+                              ? departments.data.find((d: any) => d.dept_number === request.department)?.dept_name || request.department
+                              : request.department
+                          }</div>
                           <div className="text-sm text-gray-500">{request.location}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -445,15 +463,6 @@ export default function AdminDashboard() {
                               onClick={() => handleViewDetails(request)}>
                               View
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-green-600" 
-                            onClick={() => handleApproveRequest(request.id)}
-                            disabled={request.status === 'approved' || request.status === 'rejected' || request.status === 'returned'}>Approve</Button>
-                            <Button variant="ghost" size="sm" className="text-yellow-600"
-                              onClick={() => handleReturnRequest(request.id)}
-                              disabled={request.status === 'approved' || request.status === 'rejected'}>Return</Button>
-                            <Button variant="ghost" size="sm" className="text-red-600"
-                              onClick={() => handleRejectRequest(request.id)}
-                              disabled={request.status === 'approved' || request.status === 'rejected'}>Reject</Button>
                           </div>
                         </td>
                       </tr>
@@ -673,6 +682,48 @@ export default function AdminDashboard() {
                     )}
                     <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
                     <ApprovalProgress request={typeof requestDetails === 'object' && requestDetails !== null && Object.keys(requestDetails).length > 0 ? requestDetails : selectedRequest} />
+                    {selectedRequest && selectedRequest.status === 'pending' && user && user.role === 'admin' && (
+                      <div className="mt-6">
+                        <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">Comment</label>
+                        <Textarea id="comment" value={comment}
+                          onChange={e => setComment(e.target.value)}
+                          placeholder="Enter your comment here..."
+                          disabled={!editMode} className="mb-4"/>
+                        {editMode === null ? (
+                          <div className="flex gap-2">
+                            <Button
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => setEditMode('approve')}
+                              disabled={selectedRequest.status !== 'pending'}>Approve</Button>
+                            <Button className="bg-blue-500 text-white"
+                              onClick={() => setEditMode('return')}
+                              disabled={selectedRequest.status !== 'pending'}>Return</Button>
+                            <Button className="bg-orange-600 text-white"
+                              onClick={() => setEditMode('reject')}
+                              disabled={selectedRequest.status !== 'pending'}>Reject</Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            {editMode === 'approve' && (
+                              <Button className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => handleApproveRequest(selectedRequest.id)}
+                                disabled={selectedRequest.status !== 'pending'}>Submit Approve</Button>
+                            )}
+                            {editMode === 'return' && (
+                              <Button className="bg-blue-500 text-white"
+                                onClick={() => handleReturnRequest(selectedRequest.id)}
+                                disabled={selectedRequest.status !== 'pending'}>Submit Return</Button>
+                            )}
+                            {editMode === 'reject' && (
+                              <Button className="bg-orange-600 text-white"
+                                onClick={() => handleRejectRequest(selectedRequest.id)}
+                                disabled={selectedRequest.status !== 'pending'}>Submit Reject</Button>
+                            )}
+                            <Button variant="outline" onClick={() => setEditMode(null)}>Cancel</Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
