@@ -209,10 +209,10 @@ export class DatabaseStorage implements IStorage {
   async generateRequisitionNumber(entity: string): Promise<string> {
     // Format: PR-Entity-KGBPL-YYYYMM-COUNTER
     const now = new Date();
-    const year = now.getFullYear();
-    const date = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `PR-${entity}-${year}${month}${date}`;
+    const year = String(now.getFullYear()).slice(-2);
+    // const date = String(now.getDate()).padStart(2, '0');
+    // const month = String(now.getMonth() + 1).padStart(2, '0');
+    const prefix = `${entity}-${year}`;
     // Find the max counter for this entity and year+month
     const lastPR = await this.prisma.purchase_requests.findFirst({
       where: {
@@ -227,7 +227,7 @@ export class DatabaseStorage implements IStorage {
         counter = parseInt(match[1], 10) + 1;
       }
     }
-    return `${prefix}-${String(counter).padStart(4, '0')}`;
+    return `${prefix}-${String(counter).padStart(6, '0')}`;
   }
 
   async createPurchaseRequest(data: {

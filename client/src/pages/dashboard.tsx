@@ -11,7 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { LineItemsGrid } from "@/components/ui/line-items-grid";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useQuery as useUserQuery } from "@tanstack/react-query";
+import { Textarea } from "@/components/ui/textarea";
+import type { User } from "@/lib/types";
 import {
   Pagination,
   PaginationContent,
@@ -23,8 +24,6 @@ import {
 import { Comments } from "@/components/ui/comments";
 import { AuditLog } from "@/components/ui/audit-log";
 import { ApprovalProgress } from "@/components/ui/approval-progress";
-import { Textarea } from "@/components/ui/textarea";
-import type { User } from "@/lib/types";
 
 // type User = {
 //   id: string;
@@ -67,7 +66,9 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard/stats"],
   });
 
-  const { data: user } = useUserQuery<User>({ queryKey: ["/api/auth/user"] });
+  const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+
+  const { data: users } = useQuery({ queryKey: ["/api/users"] });
 
   let queryParams: Record<string, any> = {};
   if (activeView === 'approver' && user) {
@@ -231,6 +232,9 @@ export default function Dashboard() {
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Current Approver
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -241,7 +245,7 @@ export default function Dashboard() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {isLoadingRequests ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                         Loading requests...
                       </td>
                     </tr>
@@ -268,28 +272,34 @@ export default function Dashboard() {
                               approverLevel={request.status === 'pending' ? request.currentApprovalLevel : undefined}
                             />
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {request.status === 'pending' ? (() => {
+                              if (request.currentApprovalLevel === 3 && request.approvalMatrix) {
+                                const approver3aId = request.approvalMatrix.approver_3a_emp_code;
+                                const approver3bId = request.approvalMatrix.approver_3b_emp_code;
+                                const approver3a = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3aId);
+                                const approver3b = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3bId);
+                                const names = [approver3a?.name || approver3aId, approver3b?.name || approver3bId].filter(Boolean).join(' / ');
+                                return names || '-';
+                              } else {
+                                const approverId = request.currentApproverId;
+                                const approver = Array.isArray(users) && users.find((u: any) => u.emp_code === approverId);
+                                return approver?.name || approverId || '-';
+                              }
+                            })() : '-'}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatDate(request.requestDate)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex space-x-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
+                              <Button variant="ghost" size="sm"
                                 className="text-[hsl(207,90%,54%)]"
-                                onClick={() => handleViewDetails(request)}
-                              >
-                                View
-                              </Button>
-                              {request.status === 'returned' && request.requesterId === user?.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
+                                onClick={() => handleViewDetails(request)}>View</Button>
+                              {request.status === 'returned' && request.requesterId === user?.emp_code && (
+                                <Button variant="ghost" size="sm"
                                   className="text-orange-600"
-                                  onClick={() => setLocation(`/edit-request/${request.id}`)}
-                                >
-                                  Edit
-                                </Button>
+                                  onClick={() => setLocation(`/edit-request/${request.id}`)}>Edit</Button>
                               )}
                             </div>
                           </td>
@@ -297,7 +307,7 @@ export default function Dashboard() {
                       ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                         No requests found for this view.
                       </td>
                     </tr>
@@ -398,13 +408,27 @@ export default function Dashboard() {
                         <span className="text-gray-500">Location:</span>
                         <span className="ml-2 font-medium">{selectedRequest?.location}</span>
                       </div>
-                      {/* <div className="flex items-center text-sm">
-                        <DollarSign className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="text-gray-500">Total Cost:</span>
-                        <div className="text-2xl font-bold text-green-700">
-                          {formatCurrency(selectedRequest?.totalEstimatedCost)}
+                      {/* Current Approver row, only for pending requests */}
+                      {selectedRequest?.status === 'pending' && (
+                        <div className="flex items-center text-sm">
+                          <Users className="h-4 w-4 mr-2 text-gray-500" />
+                          <span className="text-gray-500">Current Approver:</span>
+                          <span className="ml-2 font-medium">{(() => {
+                            if (selectedRequest.currentApprovalLevel === 3 && selectedRequest.approvalMatrix) {
+                              const approver3aId = selectedRequest.approvalMatrix.approver_3a_emp_code;
+                              const approver3bId = selectedRequest.approvalMatrix.approver_3b_emp_code;
+                              const approver3a = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3aId);
+                              const approver3b = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3bId);
+                              const names = [approver3a?.name || approver3aId, approver3b?.name || approver3bId].filter(Boolean).join(' / ');
+                              return names || '-';
+                            } else {
+                              const approverId = selectedRequest.currentApproverId;
+                              const approver = Array.isArray(users) && users.find((u: any) => u.emp_code === approverId);
+                              return approver?.name || approverId || '-';
+                            }
+                          })()}</span>
                         </div>
-                      </div> */}
+                      )}
                     </CardContent>
                   </Card>
 

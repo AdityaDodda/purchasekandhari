@@ -38,6 +38,16 @@ export default function UserReports() {
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["/api/reports/purchase-requests", filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.status && filters.status !== 'all') params.append('status', filters.status);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      const res = await fetch(`/api/reports/purchase-requests?${params.toString()}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
   });
   const { data: requestDetails, isLoading: isLoadingDetails } = useQuery<any>({
     queryKey: [`/api/purchase-requests/${selectedRequest?.id}/details`],

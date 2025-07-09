@@ -46,3 +46,5 @@ return -- done
 approval progress set like after a approver clicks ok on the comment we have to update the progress and approved state also -- done
 comments and audit log -- done
 admin-masters left 
+
+in the d365 data for the line-items one entity requires one type of fields then how should we do it

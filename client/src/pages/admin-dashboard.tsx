@@ -405,11 +405,9 @@ export default function AdminDashboard() {
                       Department
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Value
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Approver</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
@@ -445,9 +443,6 @@ export default function AdminDashboard() {
                           }</div>
                           <div className="text-sm text-gray-500">{request.location}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(request.totalEstimatedCost)}
-                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <StatusBadge
                             status={request.status}
@@ -457,6 +452,23 @@ export default function AdminDashboard() {
                             approverLevel={request.status === 'pending' ? request.currentApprovalLevel : undefined}
                           />
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {(() => {
+                            if (request.currentApprovalLevel === 3 && request.approvalMatrix) {
+                              const approver3aId = request.approvalMatrix.approver_3a_emp_code;
+                              const approver3bId = request.approvalMatrix.approver_3b_emp_code;
+                              const approver3a = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3aId);
+                              const approver3b = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3bId);
+                              const names = [approver3a?.name || approver3aId, approver3b?.name || approver3bId].filter(Boolean).join(' / ');
+                              return names || '-';
+                            } else {
+                              const approverId = request.currentApproverId;
+                              const approver = Array.isArray(users) && users.find((u: any) => u.emp_code === approverId);
+                              return approver?.name || approverId || '-';
+                            }
+                          })()}
+                        </td>
+                       
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <div className="flex space-x-2">
                             <Button variant="ghost" size="sm" className="text-[hsl(207,90%,54%)]"
@@ -590,6 +602,24 @@ export default function AdminDashboard() {
                         <MapPin className="h-4 w-4 mr-2 text-gray-500" />
                         <span className="text-gray-500">Location:</span>
                         <span className="ml-2 font-medium">{selectedRequest?.location}</span>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <Users className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="text-gray-500">Current Approver:</span>
+                        <span className="ml-2 font-medium">{(() => {
+                          if (selectedRequest?.currentApprovalLevel === 3 && selectedRequest?.approvalMatrix) {
+                            const approver3aId = selectedRequest.approvalMatrix.approver_3a_emp_code;
+                            const approver3bId = selectedRequest.approvalMatrix.approver_3b_emp_code;
+                            const approver3a = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3aId);
+                            const approver3b = Array.isArray(users) && users.find((u: any) => u.emp_code === approver3bId);
+                            const names = [approver3a?.name || approver3aId, approver3b?.name || approver3bId].filter(Boolean).join(' / ');
+                            return names || '-';
+                          } else {
+                            const approverId = selectedRequest?.currentApproverId;
+                            const approver = Array.isArray(users) && users.find((u: any) => u.emp_code === approverId);
+                            return approver?.name || approverId || '-';
+                          }
+                        })()}</span>
                       </div>
                     </CardContent>
                   </Card>
