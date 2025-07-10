@@ -148,27 +148,29 @@ model line_items {
 }
 
 model purchase_requests {
-  pr_number                                 String        @id @db.VarChar(50)
-  title                                     String?       @db.VarChar(255)
-  request_date                              DateTime?     @db.Date
-  department                                String?       @db.VarChar(100)
-  location                                  String?       @db.VarChar(100)
-  business_justification_code               String?       @db.VarChar(50)
+  pr_number                                 String               @id @db.VarChar(50)
+  title                                     String?              @db.VarChar(255)
+  request_date                              DateTime?            @db.Date
+  department                                String?              @db.VarChar(100)
+  location                                  String?              @db.VarChar(100)
+  business_justification_code               String?              @db.VarChar(50)
   business_justification_details            String?
-  status                                    String?       @db.VarChar(50)
+  status                                    String?              @db.VarChar(50)
   current_approval_level                    Int?
-  total_estimated_cost                      Decimal?      @db.Decimal(12, 2)
-  requester_emp_code                        String?       @db.VarChar(30)
-  current_approver_emp_code                 String?       @db.VarChar(30)
-  created_by                                String?       @db.VarChar(30)
-  updated_by                                String?       @db.VarChar(30)
-  created_at                                DateTime?     @default(now()) @db.Timestamp(6)
-  updated_at                                DateTime?     @default(now()) @db.Timestamp(6)
+  total_estimated_cost                      Decimal?             @db.Decimal(12, 2)
+  requester_emp_code                        String?              @db.VarChar(30)
+  current_approver_emp_code                 String?              @db.VarChar(30)
+  created_by                                String?              @db.VarChar(30)
+  updated_by                                String?              @db.VarChar(30)
+  created_at                                DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at                                DateTime?            @default(now()) @db.Timestamp(6)
   attachments                               attachments[]
   audit_logs                                audit_logs[]
+  escalation_matrix                         escalation_matrix?
   line_items                                line_items[]
-  users_purchase_requests_created_byTousers users?        @relation("purchase_requests_created_byTousers", fields: [created_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
-  users_purchase_requests_updated_byTousers users?        @relation("purchase_requests_updated_byTousers", fields: [updated_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+  pr_escalation_logs                        pr_escalation_logs[]
+  users_purchase_requests_created_byTousers users?               @relation("purchase_requests_created_byTousers", fields: [created_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
+  users_purchase_requests_updated_byTousers users?               @relation("purchase_requests_updated_byTousers", fields: [updated_by], references: [emp_code], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model attachments {
@@ -189,4 +191,42 @@ model sessions {
   expire DateTime @db.Timestamp(6)
 
   @@index([expire])
+}
+
+model escalation_matrix {
+  pr_number         String            @id @db.VarChar(50)
+  req_emp_code      String?           @db.VarChar(30)
+  req_emp_mail      String?           @db.VarChar(100)
+  req_emp_name      String?           @db.VarChar(100)
+  approver_1_code   String?           @db.VarChar(30)
+  approver_1_mail   String?           @db.VarChar(100)
+  approver_1_name   String?           @db.VarChar(100)
+  approver_2_code   String?           @db.VarChar(30)
+  approver_2_mail   String?           @db.VarChar(100)
+  approver_2_name   String?           @db.VarChar(100)
+  approver_3a_code  String?           @db.VarChar(30)
+  approver_3a_mail  String?           @db.VarChar(100)
+  approver_3a_name  String?           @db.VarChar(100)
+  approver_3b_code  String?           @db.VarChar(30)
+  approver_3b_mail  String?           @db.VarChar(100)
+  approver_3b_name  String?           @db.VarChar(100)
+  manager_1_code    String?           @db.VarChar(30)
+  manager_1_mail    String?           @db.VarChar(100)
+  manager_1_name    String?           @db.VarChar(100)
+  manager_2_code    String?           @db.VarChar(30)
+  manager_2_mail    String?           @db.VarChar(100)
+  manager_2_name    String?           @db.VarChar(100)
+  purchase_requests purchase_requests @relation(fields: [pr_number], references: [pr_number], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model pr_escalation_logs {
+  id                Int               @id @default(autoincrement())
+  pr_number         String            @db.VarChar(50)
+  level             Int
+  status            String?           @default("pending") @db.VarChar(20)
+  escalated_at      DateTime?         @default(now()) @db.Timestamp(6)
+  notified_at       DateTime?         @db.Timestamp(6)
+  email_sent_to     String?           @db.VarChar(500)
+  comment           String?           @db.VarChar(500)
+  purchase_requests purchase_requests @relation(fields: [pr_number], references: [pr_number], onDelete: Cascade, onUpdate: NoAction)
 }

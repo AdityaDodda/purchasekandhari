@@ -129,10 +129,10 @@ export interface IStorage {
   updateApprovalMatrix(empCode: string, matrix: Partial<InsertApprovalMatrix>): Promise<ApprovalMatrix>;
   deleteApprovalMatrix(empCode: string): Promise<void>;
 
-  getAllEscalationMatrix(search?: string): Promise<EscalationMatrix[]>;
-  createEscalationMatrix(matrix: InsertEscalationMatrix): Promise<EscalationMatrix>;
-  updateEscalationMatrix(id: number, matrix: Partial<InsertEscalationMatrix>): Promise<EscalationMatrix>;
-  deleteEscalationMatrix(id: number): Promise<void>;
+  getAllEscalationMatrix(search?: string): Promise<any[]>;
+  createEscalationMatrix(matrix: any): Promise<any>;
+  updateEscalationMatrix(pr_number: string, matrix: any): Promise<any>;
+  deleteEscalationMatrix(pr_number: string): Promise<void>;
 
   getAllInventory(
     search?: string,
@@ -640,18 +640,60 @@ export class DatabaseStorage implements IStorage {
     await this.prisma.approval_matrix.delete({ where: { emp_code: empCode } });
   }
 
-  // Escalation Matrix
-  async getAllEscalationMatrix(search?: string): Promise<EscalationMatrix[]> {
-    throw new Error("ERR: getAllEscalationMatrix not implemented. EscalationMatrix model is missing from schema.prisma.");
+  // Escalation Matrix Master
+  async getAllEscalationMatrix(search?: string): Promise<any[]> {
+    const where = search
+      ? {
+          OR: [
+            { pr_number: { contains: search, mode: 'insensitive' } },
+            { req_emp_code: { contains: search, mode: 'insensitive' } },
+            { req_emp_mail: { contains: search, mode: 'insensitive' } },
+            { req_emp_name: { contains: search, mode: 'insensitive' } },
+            { approver_1_code: { contains: search, mode: 'insensitive' } },
+            { approver_2_code: { contains: search, mode: 'insensitive' } },
+            { approver_3_code: { contains: search, mode: 'insensitive' } },
+            { manager_1_code: { contains: search, mode: 'insensitive' } },
+            { manager_2_code: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+    return this.prisma.escalation_matrix.findMany({ where });
   }
-  async createEscalationMatrix(matrix: InsertEscalationMatrix): Promise<EscalationMatrix> {
-    throw new Error("Method not implemented.");
+  async createEscalationMatrix(matrix: any): Promise<any> {
+    return this.prisma.escalation_matrix.create({ data: matrix });
   }
-  async updateEscalationMatrix(id: number, matrix: Partial<InsertEscalationMatrix>): Promise<EscalationMatrix> {
-    throw new Error("Method not implemented.");
+  async updateEscalationMatrix(pr_number: string, matrix: any): Promise<any> {
+    return this.prisma.escalation_matrix.update({ where: { pr_number }, data: matrix });
   }
-  async deleteEscalationMatrix(id: number): Promise<void> {
-    throw new Error("Method not implemented.");
+  async deleteEscalationMatrix(pr_number: string): Promise<void> {
+    await this.prisma.escalation_matrix.delete({ where: { pr_number } });
+  }
+
+  // PR Escalation Logs
+  async getAllPrEscalationLogs(search?: string): Promise<any[]> {
+    const where = search
+      ? {
+          OR: [
+            { pr_number: { contains: search, mode: 'insensitive' } },
+            { status: { contains: search, mode: 'insensitive' } },
+            { email_sent_to: { contains: search, mode: 'insensitive' } },
+            { comment: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+    return this.prisma.pr_escalation_logs.findMany({ where });
+  }
+  async getPrEscalationLogById(id: number): Promise<any | null> {
+    return this.prisma.pr_escalation_logs.findUnique({ where: { id } });
+  }
+  async createPrEscalationLog(log: any): Promise<any> {
+    return this.prisma.pr_escalation_logs.create({ data: log });
+  }
+  async updatePrEscalationLog(id: number, log: any): Promise<any> {
+    return this.prisma.pr_escalation_logs.update({ where: { id }, data: log });
+  }
+  async deletePrEscalationLog(id: number): Promise<void> {
+    await this.prisma.pr_escalation_logs.delete({ where: { id } });
   }
 
   // Inventory Master
@@ -874,6 +916,94 @@ export class DatabaseStorage implements IStorage {
         comment: data.comment ?? null,
         acted_at: data.acted_at || new Date(),
       },
+    });
+  }
+async populateEscalationMatrixForPR(pr_number: string): Promise<any> {
+  const pr = await this.prisma.purchase_requests.findUnique({ where: { pr_number } });
+  if (!pr?.requester_emp_code) return null;
+
+  const approvalMatrix = await this.prisma.approval_matrix.findUnique({
+    where: { emp_code: pr.requester_emp_code }
+  });
+  if (!approvalMatrix) return null;
+
+  const empCodes = [
+    pr.requester_emp_code,
+    approvalMatrix.approver_1_emp_code,
+    approvalMatrix.approver_2_emp_code,
+    approvalMatrix.approver_3a_emp_code,
+    approvalMatrix.approver_3b_emp_code
+  ].filter(Boolean);
+
+  const users = await this.prisma.users.findMany({
+    where: { emp_code: { in: empCodes } }
+  });
+
+  const getUserByEmpCode = (code: string | null | undefined) =>
+    users.find(u => u.emp_code === code);
+
+  const requester = getUserByEmpCode(pr.requester_emp_code);
+  const approver1 = getUserByEmpCode(approvalMatrix.approver_1_emp_code);
+  const approver2 = getUserByEmpCode(approvalMatrix.approver_2_emp_code);
+  const approver3a = getUserByEmpCode(approvalMatrix.approver_3a_emp_code);
+  const approver3b = getUserByEmpCode(approvalMatrix.approver_3b_emp_code);
+
+  // Collect manager names to fetch their info
+  const managerNames = [
+    approver1?.manager_name,
+    approver2?.manager_name
+  ].filter(Boolean) as string[];
+
+  const managerUsers = await this.prisma.users.findMany({
+    where: { name: { in: managerNames } }
+  });
+
+  const getManagerForApprover = (approver: any) =>
+    managerUsers.find(m => m.name === approver?.manager_name);
+
+  const manager1 = getManagerForApprover(approver1);
+  const manager2 = getManagerForApprover(approver2);
+
+  return {
+    pr_number,
+
+    req_emp_code: requester?.emp_code,
+    req_emp_mail: requester?.email,
+    req_emp_name: requester?.name,
+
+    approver_1_code: approver1?.emp_code,
+    approver_1_mail: approver1?.email,
+    approver_1_name: approver1?.name,
+
+    approver_2_code: approver2?.emp_code,
+    approver_2_mail: approver2?.email,
+    approver_2_name: approver2?.name,
+
+    approver_3a_code: approver3a?.emp_code,
+    approver_3a_mail: approver3a?.email,
+    approver_3a_name: approver3a?.name,
+
+    approver_3b_code: approver3b?.emp_code,
+    approver_3b_mail: approver3b?.email,
+    approver_3b_name: approver3b?.name,
+
+    manager_1_code: manager1?.emp_code,
+    manager_1_mail: manager1?.email,
+    manager_1_name: manager1?.name,
+
+    manager_2_code: manager2?.emp_code,
+    manager_2_mail: manager2?.email,
+    manager_2_name: manager2?.name,
+  };
+}
+
+  async upsertEscalationMatrixForPR(pr_number: string): Promise<any> {
+    const data = await this.populateEscalationMatrixForPR(pr_number);
+    if (!data) throw new Error("Cannot populate escalation matrix for this PR");
+    return this.prisma.escalation_matrix.upsert({
+      where: { pr_number },
+      update: data,
+      create: data,
     });
   }
 }

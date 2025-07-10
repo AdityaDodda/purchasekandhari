@@ -67,6 +67,39 @@ export interface ApprovalMatrix {
   users?: User;
 }
 
+export interface escalation_matrix {
+  prNumber: string;
+  reqEmpCode?: string;
+  reqEmpMail?: string;
+  reqEmpName?: string;
+  approver1Code?: string;
+  approver1Mail?: string;
+  approver1Name?: string;
+  approver2Code?: string;
+  approver2Mail?: string;
+  approver2Name?: string;
+  approver3Code?: string;
+  approver3Mail?: string;
+  approver3Name?: string;
+  manager1Code?: string;
+  manager1Mail?: string;
+  manager1Name?: string;
+  manager2Code?: string;
+  manager2Mail?: string;
+  manager2Name?: string;
+}
+
+export interface pr_escalation_logs {
+  id: number;
+  prNumber: string;
+  level: number;
+  status?: string;
+  escalatedAt?: string;
+  notifiedAt?: string;
+  emailSentTo?: string;
+  comment?: string;
+}
+
 export interface PurchaseRequest {
   id: number;
   requisitionNumber: string;

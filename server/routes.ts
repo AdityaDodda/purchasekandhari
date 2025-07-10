@@ -1203,6 +1203,28 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+// Escalation Matrix Routes
+app.get("/api/escalation-matrix/:pr_number", async (req, res) => {
+  try {
+    const result = await storage.populateEscalationMatrixForPR(req.params.pr_number);
+    if (!result) return res.status(404).json({ error: "Not found or cannot populate escalation matrix." });
+    res.json(result);
+  } catch (error) {
+    console.error("Error populating matrix:", error);
+    res.status(500).json({ error: "Failed to populate escalation matrix." });
+  }
+});
+
+  // Upsert escalation matrix for a PR
+  app.post("/api/escalation-matrix/:pr_number", async (req, res) => {
+    try {
+      const result = await storage.upsertEscalationMatrixForPR(req.params.pr_number);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to populate and save escalation matrix." });
+    }
+  });
+
   // Catch-all for unknown API routes
   app.use('/api', (req, res) => {
     res.status(404).json({ message: 'API route not found' });
