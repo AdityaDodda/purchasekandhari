@@ -119,6 +119,19 @@ export default function MyRequests() {
     );
   }
 
+  function handleApprove(request: any) {
+    alert(`Approve clicked for request ${request.requisitionNumber}`);
+    // TODO: Call API to approve
+  }
+  function handleReject(request: any) {
+    alert(`Reject clicked for request ${request.requisitionNumber}`);
+    // TODO: Call API to reject
+  }
+  function handleReturn(request: any) {
+    alert(`Return clicked for request ${request.requisitionNumber}`);
+    // TODO: Call API to return
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -598,6 +611,34 @@ export default function MyRequests() {
                         <Comments purchaseRequestId={(safeRequestDetails as any).id} />
                         <AuditLog purchaseRequestId={(safeRequestDetails as any).id} />
                       </>
+                    )}
+                  </div>
+                )}
+                {selectedRequest && (
+                  <div className="flex space-x-2 mt-4">
+                    {selectedRequest.canApprove && (
+                      <Button
+                        className="bg-green-600 text-white"
+                        onClick={() => handleApprove(selectedRequest)}
+                      >
+                        Approve
+                      </Button>
+                    )}
+                    {selectedRequest.canReject && (
+                      <Button
+                        className="bg-red-600 text-white"
+                        onClick={() => handleReject(selectedRequest)}
+                      >
+                        Reject
+                      </Button>
+                    )}
+                    {selectedRequest.canReturn && (
+                      <Button
+                        className="bg-yellow-500 text-white"
+                        onClick={() => handleReturn(selectedRequest)}
+                      >
+                        Return
+                      </Button>
                     )}
                   </div>
                 )}

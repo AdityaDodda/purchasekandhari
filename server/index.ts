@@ -6,6 +6,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 import { PrismaSessionStore } from "./sessionStore";
 import { PrismaClient } from "@prisma/client";
+import { escalationService } from "./escalation";
 
 dotenv.config();
 

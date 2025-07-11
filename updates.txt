@@ -123,3 +123,76 @@ CREATE TABLE pr_escalation_logs (
 );
 
 as you can observe the schema.prisma and routes.ts i am updating escalation_matrix for the full approver list and the manager list now i want to use node-cron and set a timer where when a requester submits a request it goes to approver_1 but if he doesn't approve in 12hrs it should escalate to manager_1 and we should give both manager,approver_1 rights for approving then if one of them approves it should go to approver 2 then we have to take the time from when the first approver approved 12 hrs he doesn't approve it should escalate to manager_2 but both the manager_2 and approver_2 has the rights for approving and after one of them approves it should go to third level where we have to check whether 24hrs has passed since approver_2 approved the request then we have to reject the request in this we have to consider excluding sundays
+
+
+PR Master Template
+PR Record(Sheet 1)
+Requisition Number A2 pr_number (purchase_requests)
+DefaultAccountingDate B2 request_date (purchase_requests)
+DefaultRequestDate C2 request_date (purchase_requests)
+Ispurchaserequisitionhold D2 No(Default Value)
+Preparerpersonnelnumber E2 blank
+requistionname F2 title (purchase_requests)
+requistionpurpose G2 Consumption(Default Value)
+
+Line Items(Sheet 2)
+Requistion Number A2 pr_number (line_items)
+requistionlinenumber B2 id (line_items)
+AccountingDate C2 request_date (purchase_requests)
+BuyingLegalEntityid D2 entity (users)
+Currencycode E2 INR(Default Value)
+DeliveryAddressDescription F2 DeliveryAddressName (warehouse_delivery)
+DeliveryAddressName G2 DeliveryAddressName (warehouse_delivery)
+DeliveryAddressStateId H2 DELIVERYADDRESSSTATEID (warehouse_delivery)
+DeliveryAddressStreet I2 DELIVERYADDRESSSTREET (warehouse_delivery)
+DeliveryAdressZipCode J2 DELIVERYADDRESSZIPCODE (warehouse_delivery)
+FORMATTEDDELIVERYADDRESS K2	FORMATTEDDELIVERYADDRESS (warehouse_delivery)
+ITEMNUMBER L2 itemnumber (inventory) || itemid (in api)
+LINEAMOUNT M2 0(default value)
+LINEDESCRIPTION N2 productname (inventory) || ProductName (in api)
+LINESTATUS O2 final status from app (purchase_requests)
+LINETYPE P2 producttype (inventory) || InventoryUOM (in api)
+PROCUREMENTPRODUCTCATEGORYNAME Q2 modify item master api
+PURCHASEUNITSYMBOL R2 inventoryunitssymbol (inventory) || PurchaseUOM (in api)
+RECEIVINGOPERATINGUNITNUMBER S2 department (purchase_requests)
+RECEIVINGSITEID T2 receivingsiteid (warehouse_delivery)
+RECEIVINGWAREHOUSEID U2 receivingwarehouseid (warehouse_delivery)
+REQUESTEDPURCHASEQUANTITY V2 requiredquantity (line_items)
+REQUISITIONERPERSONNELNUMBER W2 blank
+
+
+
+PR Master Template
+PR Record(Sheet 1)
+Requisition Number A2 pr_number (purchase_requests)
+DefaultAccountingDate B2 request_date (purchase_requests)
+DefaultRequestDate C2 request_date (purchase_requests)
+Ispurchaserequisitionhold D2 No(Default Value)
+Preparerpersonnelnumber E2 blank
+requistionname F2 title (purchase_requests)
+requistionpurpose G2 Consumption(Default Value)
+
+Line Items(Sheet 2)
+Requistion Number A2 pr_number (line_items)
+requistionlinenumber B2 id (line_items)
+AccountingDate C2 request_date (purchase_requests)
+BuyingLegalEntityid D2 entity (users)
+Currencycode E2 INR(Default Value)
+DeliveryAddressDescription F2 DeliveryAddressName (warehouse_delivery)
+DeliveryAddressName G2 DeliveryAddressName (warehouse_delivery)
+DeliveryAddressStateId H2 DELIVERYADDRESSSTATEID (warehouse_delivery)
+DeliveryAddressStreet I2 DELIVERYADDRESSSTREET (warehouse_delivery)
+DeliveryAdressZipCode J2 DELIVERYADDRESSZIPCODE (warehouse_delivery)
+FORMATTEDDELIVERYADDRESS K2	FORMATTEDDELIVERYADDRESS (warehouse_delivery)
+ITEMNUMBER L2 itemnumber (inventory)
+LINEAMOUNT M2 0(default value)
+LINEDESCRIPTION N2 productname (inventory)
+LINESTATUS O2 final status from app (purchase_requests)
+LINETYPE P2 producttype (inventory)
+PROCUREMENTPRODUCTCATEGORYNAME Q2 productsearchname (inventory)
+PURCHASEUNITSYMBOL R2 inventoryunitssymbol (inventory)
+RECEIVINGOPERATINGUNITNUMBER S2 department (purchase_requests)
+RECEIVINGSITEID T2 receivingsiteid (warehouse_delivery)
+RECEIVINGWAREHOUSEID U2 receivingwarehouseid (warehouse_delivery)
+REQUESTEDPURCHASEQUANTITY V2 requiredquantity (line_items)
+REQUISITIONERPERSONNELNUMBER W2 blank

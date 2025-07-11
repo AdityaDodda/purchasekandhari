@@ -230,3 +230,32 @@ model pr_escalation_logs {
   comment           String?           @db.VarChar(500)
   purchase_requests purchase_requests @relation(fields: [pr_number], references: [pr_number], onDelete: Cascade, onUpdate: NoAction)
 }
+
+model employee_entity {
+  legal_entity       String    @db.VarChar(100)
+  name               String    @db.VarChar(100)
+  personnel_number   String    @id @db.VarChar(50)
+  phone              String?   @db.VarChar(20)
+  email_address      String?   @db.VarChar(255)
+  worker_type        String    @db.VarChar(50)
+  created_by         String?   @db.VarChar(100)
+  created_date_time  DateTime? @db.Timestamp(6)
+  modified_by        String?   @db.VarChar(100)
+  modified_date_time DateTime? @db.Timestamp(6)
+}
+
+model warehouse_delivery {
+  buying_legal_entity_id     String    @db.VarChar(50)
+  receiving_site_id          String    @db.VarChar(50)
+  receiving_warehouse_id     String    @id @db.VarChar(50)
+  receiving_warehouse_name   String    @db.VarChar(100)
+  formatted_delivery_address String?
+  delivery_address_name      String?   @db.VarChar(100)
+  delivery_address_state_id  String?   @db.VarChar(10)
+  delivery_address_street    String?   @db.VarChar(255)
+  delivery_address_zipcode   String?   @db.VarChar(20)
+  created_by                 String?   @db.VarChar(100)
+  created_date_time          DateTime? @default(now()) @db.Timestamp(6)
+  modified_by                String?   @db.VarChar(100)
+  modified_date_time         DateTime? @default(now()) @db.Timestamp(6)
+}

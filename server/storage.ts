@@ -133,6 +133,10 @@ export interface IStorage {
   createEscalationMatrix(matrix: any): Promise<any>;
   updateEscalationMatrix(pr_number: string, matrix: any): Promise<any>;
   deleteEscalationMatrix(pr_number: string): Promise<void>;
+  
+  // Escalation logs methods
+  getEscalationLogsForPR(pr_number: string): Promise<any[]>;
+  checkEscalationStatus(pr_number: string, level: number): Promise<any | null>;
 
   getAllInventory(
     search?: string,
@@ -291,6 +295,7 @@ export class DatabaseStorage implements IStorage {
           current_approval_level: 1,
         },
       });
+      
       const lineItems = await Promise.all(
         data.lineItems.map(item =>
           tx.line_items.create({
@@ -310,6 +315,20 @@ export class DatabaseStorage implements IStorage {
           })
         )
       );
+      
+      // Create escalation matrix for this PR
+      try {
+        const escalationData = await this.populateEscalationMatrixForPR(pr_number);
+        if (escalationData) {
+          await tx.escalation_matrix.create({
+            data: escalationData
+          });
+        }
+      } catch (error) {
+        console.error('Error creating escalation matrix for PR:', pr_number, error);
+        // Don't fail the transaction if escalation matrix creation fails
+      }
+      
       return { ...pr, lineItems };
     });
   }
@@ -354,8 +373,6 @@ export class DatabaseStorage implements IStorage {
       where.location = filters.location;
     }
     // Fetch requests
-    // console.log('getAllPurchaseRequests filters:', filters);
-    // console.log('getAllPurchaseRequests where clause:', where);
     const requests = await this.prisma.purchase_requests.findMany({
       where,
       orderBy: { created_at: 'desc' },
@@ -363,32 +380,74 @@ export class DatabaseStorage implements IStorage {
         line_items: true,
       },
     });
-    // console.log('getAllPurchaseRequests raw results count:', requests.length);
     // Fetch approval matrix for all relevant requester_emp_codes
-    const empCodes = Array.from(new Set(requests.map((r: any) => r.requester_emp_code).filter(Boolean)));
+    const empCodes = Array.from(new Set(requests.map((r: any) => r.requester_emp_code).filter((x: any): x is string => !!x)));
     const approvalMatrices = await this.prisma.approval_matrix.findMany({
       where: { emp_code: { in: empCodes } },
     });
     const matrixMap = Object.fromEntries(approvalMatrices.map(m => [m.emp_code, m]));
-    // If parallel approval filter, filter in JS for level 3
+    // Fetch escalation matrix for all PRs
+    const prNumbers = requests.map((r: any) => r.pr_number).filter((x: any): x is string => !!x);
+    const escalationMatrices = await this.prisma.escalation_matrix.findMany({
+      where: { pr_number: { in: prNumbers } },
+    });
+    const escalationMap = Object.fromEntries(escalationMatrices.map(m => [m.pr_number, m]));
+    // Fetch escalation logs for all PRs
+    const escalationLogs = await this.prisma.pr_escalation_logs.findMany({
+      where: { pr_number: { in: prNumbers } },
+      orderBy: { escalated_at: 'desc' },
+    });
+    // If parallel approval filter, filter in JS for level 3 and escalations
     let filteredRequests = requests;
     if (filters.approverEmpCode || filters.currentApproverId) {
       const approverId = filters.approverEmpCode || filters.currentApproverId;
-      // console.log('Filtering requests for approver:', approverId);
       filteredRequests = requests.filter((req: any) => {
-        // console.log('Checking request:', req.pr_number, 'status:', req.status, 'current_approver:', req.current_approver_emp_code, 'level:', req.current_approval_level);
-        
         // If status filter is 'pending', only show pending requests
         if (filters.status === 'pending' && req.status !== 'pending') {
-          // console.log('Filtering out non-pending request:', req.pr_number);
           return false;
         }
-        
+        // Normal assignment
         if (req.current_approver_emp_code === approverId) {
-          // console.log('Including request assigned to approver:', req.pr_number);
           return true;
         }
-        
+        // Escalation logic for level 1
+        if (
+          req.current_approval_level === 1 &&
+          !req.current_approver_emp_code &&
+          escalationMap[req.pr_number]
+        ) {
+          const escalationLog = escalationLogs.find(
+            (log: any) => log.pr_number === req.pr_number && log.level === 1 && log.status === 'escalated'
+          );
+          if (escalationLog) {
+            const escalation = escalationMap[req.pr_number];
+            if (
+              approverId === escalation.approver_1_code ||
+              approverId === escalation.manager_1_code
+            ) {
+              return true;
+            }
+          }
+        }
+        // Escalation logic for level 2
+        if (
+          req.current_approval_level === 2 &&
+          !req.current_approver_emp_code &&
+          escalationMap[req.pr_number]
+        ) {
+          const escalationLog = escalationLogs.find(
+            (log: any) => log.pr_number === req.pr_number && log.level === 2 && log.status === 'escalated'
+          );
+          if (escalationLog) {
+            const escalation = escalationMap[req.pr_number];
+            if (
+              approverId === escalation.approver_2_code ||
+              approverId === escalation.manager_2_code
+            ) {
+              return true;
+            }
+          }
+        }
         // Parallel approval: level 3, current_approver_emp_code is null
         const matrix = matrixMap[req.requester_emp_code];
         if (
@@ -398,34 +457,74 @@ export class DatabaseStorage implements IStorage {
           (matrix.approver_3a_emp_code === approverId ||
             matrix.approver_3b_emp_code === approverId)
         ) {
-          // console.log('Including parallel approval request:', req.pr_number);
           return true;
         }
-        // console.log('Filtering out request:', req.pr_number);
         return false;
       });
-      // console.log('Filtered results count:', filteredRequests.length);
     }
     // Map DB fields to API fields expected by frontend
-    return filteredRequests.map((req: any) => ({
-      id: req.pr_number, // Map pr_number to id
-      requisitionNumber: req.pr_number, // Also provide as requisitionNumber
-      title: req.title,
-      requestDate: req.request_date,
-      department: req.department,
-      location: req.location,
-      businessJustificationCode: req.business_justification_code,
-      businessJustificationDetails: req.business_justification_details,
-      status: req.status,
-      currentApprovalLevel: req.current_approval_level,
-      totalEstimatedCost: req.total_estimated_cost,
-      requesterId: req.requester_emp_code,
-      currentApproverId: req.current_approver_emp_code,
-      createdAt: req.created_at,
-      updatedAt: req.updated_at,
-      lineItems: req.line_items,
-      approvalMatrix: matrixMap[req.requester_emp_code],
-    }));
+    return filteredRequests.map((req: any) => {
+      const matrix = matrixMap[req.requester_emp_code];
+      const escalation = escalationMap[req.pr_number];
+      const escalationLog = escalationLogs.find(
+        (log: any) => log.pr_number === req.pr_number && log.level === req.current_approval_level && log.status === 'escalated'
+      );
+      const userEmpCode = filters.userEmpCode;
+      let canApprove = false;
+      let canReject = false;
+      let canReturn = false;
+      if (userEmpCode) {
+        // Normal assignment
+        if (req.current_approver_emp_code === userEmpCode) {
+          canApprove = true;
+          canReject = true;
+          canReturn = true;
+        } else if (
+          !req.current_approver_emp_code &&
+          escalationLog &&
+          escalation &&
+          (
+            (req.current_approval_level === 1 && (userEmpCode === escalation.approver_1_code || userEmpCode === escalation.manager_1_code)) ||
+            (req.current_approval_level === 2 && (userEmpCode === escalation.approver_2_code || userEmpCode === escalation.manager_2_code))
+          )
+        ) {
+          canApprove = true;
+          canReject = true;
+          canReturn = true;
+        } else if (
+          req.current_approval_level === 3 &&
+          !req.current_approver_emp_code &&
+          matrix &&
+          (matrix.approver_3a_emp_code === userEmpCode || matrix.approver_3b_emp_code === userEmpCode)
+        ) {
+          canApprove = true;
+          canReject = true;
+          canReturn = true;
+        }
+      }
+      return {
+        id: req.pr_number, // Map pr_number to id
+        requisitionNumber: req.pr_number, // Also provide as requisitionNumber
+        title: req.title,
+        requestDate: req.request_date,
+        department: req.department,
+        location: req.location,
+        businessJustificationCode: req.business_justification_code,
+        businessJustificationDetails: req.business_justification_details,
+        status: req.status,
+        currentApprovalLevel: req.current_approval_level,
+        totalEstimatedCost: req.total_estimated_cost,
+        requesterId: req.requester_emp_code,
+        currentApproverId: req.current_approver_emp_code,
+        createdAt: req.created_at,
+        updatedAt: req.updated_at,
+        lineItems: req.line_items,
+        approvalMatrix: matrix,
+        canApprove,
+        canReject,
+        canReturn,
+      };
+    });
   }
   async updatePurchaseRequest(id: string, request: Partial<InsertPurchaseRequest>): Promise<PurchaseRequest> {
     return this.prisma.purchase_requests.update({
@@ -667,6 +766,23 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteEscalationMatrix(pr_number: string): Promise<void> {
     await this.prisma.escalation_matrix.delete({ where: { pr_number } });
+  }
+
+  async getEscalationLogsForPR(pr_number: string): Promise<any[]> {
+    return this.prisma.pr_escalation_logs.findMany({
+      where: { pr_number },
+      orderBy: { escalated_at: 'desc' }
+    });
+  }
+
+  async checkEscalationStatus(pr_number: string, level: number): Promise<any | null> {
+    return this.prisma.pr_escalation_logs.findFirst({
+      where: {
+        pr_number,
+        level,
+        status: 'escalated'
+      }
+    });
   }
 
   // PR Escalation Logs
@@ -919,13 +1035,25 @@ export class DatabaseStorage implements IStorage {
     });
   }
 async populateEscalationMatrixForPR(pr_number: string): Promise<any> {
+  console.log(`Populating escalation matrix for PR: ${pr_number}`);
+  
   const pr = await this.prisma.purchase_requests.findUnique({ where: { pr_number } });
-  if (!pr?.requester_emp_code) return null;
+  if (!pr?.requester_emp_code) {
+    console.log(`No purchase request or requester_emp_code found for PR: ${pr_number}`);
+    return null;
+  }
+  
+  console.log(`Found purchase request for PR: ${pr_number}, requester: ${pr.requester_emp_code}`);
 
   const approvalMatrix = await this.prisma.approval_matrix.findUnique({
     where: { emp_code: pr.requester_emp_code }
   });
-  if (!approvalMatrix) return null;
+  if (!approvalMatrix) {
+    console.log(`No approval matrix found for requester: ${pr.requester_emp_code}`);
+    return null;
+  }
+  
+  console.log(`Found approval matrix for requester: ${pr.requester_emp_code}`);
 
   const empCodes = [
     pr.requester_emp_code,
@@ -1005,6 +1133,11 @@ async populateEscalationMatrixForPR(pr_number: string): Promise<any> {
       update: data,
       create: data,
     });
+  }
+
+  // Clear escalation logs for a PR (used when resubmitting a returned request)
+  async clearEscalationLogsForPR(pr_number: string): Promise<void> {
+    await this.prisma.pr_escalation_logs.deleteMany({ where: { pr_number } });
   }
 }
 

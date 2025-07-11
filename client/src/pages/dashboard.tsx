@@ -72,11 +72,11 @@ export default function Dashboard() {
 
   let queryParams: Record<string, any> = {};
   if (activeView === 'approver' && user) {
-    queryParams = { currentApproverId: user.emp_code, status: 'pending' };
+    queryParams = { currentApproverId: user.emp_code, status: 'pending', userEmpCode: user.emp_code };
   } else if (activeView === 'pending') {
-    queryParams = { currentApproverId: user?.emp_code, status: 'pending' };
+    queryParams = { currentApproverId: user?.emp_code, status: 'pending', userEmpCode: user?.emp_code };
   } else if (activeView === 'my') {
-    queryParams = { createdBy: user?.emp_code };
+    queryParams = { createdBy: user?.emp_code, userEmpCode: user?.emp_code };
   }
 
   const { data: requests, isLoading: isLoadingRequests } = useQuery<PurchaseRequest[]>({
@@ -515,15 +515,25 @@ export default function Dashboard() {
                     <h3 className="text-lg font-semibold mb-4">Approval Progress</h3>
                     <ApprovalProgress request={selectedRequest} />
                     <ApprovalAuditLog requestId={selectedRequest.id} />
-                    {/* Approve button for current approver only */}
-                    {user && selectedRequest.status === 'pending' && (
-                      (selectedRequest.currentApproverId === user.emp_code ||
-                        (selectedRequest.currentApprovalLevel === 3 && !selectedRequest.currentApproverId &&
-                          selectedRequest.approvalMatrix &&
-                          (selectedRequest.approvalMatrix.approver_3a_emp_code === user.emp_code ||
-                            selectedRequest.approvalMatrix.approver_3b_emp_code === user.emp_code)
-                        )
-                      ) && (
+                    {/* Approve button for current approver, manager, or escalation approver (using escalation_matrix) */}
+                    {user && selectedRequest.status === 'pending' && (() => {
+                      // Get escalation matrix from selectedRequest or requestDetails
+                      const escalation = selectedRequest.escalation_matrix || requestDetails?.escalation_matrix;
+                      if (!escalation) return false;
+                      const userEmpCode = user.emp_code;
+                      // List all possible approver/manager codes
+                      const approverCodes = [
+                        escalation.approver_1_code,
+                        escalation.approver_2_code,
+                        escalation.approver_3a_code,
+                        escalation.approver_3b_code,
+                        escalation.manager_1_code,
+                        escalation.manager_2_code
+                      ];
+                      // Only show if user is in the escalation matrix as approver or manager
+                      if (!approverCodes.includes(userEmpCode)) return false;
+                      console.log(approverCodes);
+                      return (
                         <div className="mt-6">
                           <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">Comment</label>
                           <Textarea
@@ -648,8 +658,8 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
-                      )
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
               </div>
