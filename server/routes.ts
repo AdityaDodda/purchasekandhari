@@ -7,6 +7,10 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { sendPasswordResetEmail } from "./email";
+import { PrismaClient } from "@prisma/client";
+import { escalationService } from "./escalation";
+
+const prisma = new PrismaClient();
 
 // Zod Schemas (Redefined for Prisma Compatibility with your new schema)
 const insertUserSchema = z.object({
@@ -352,6 +356,35 @@ export function registerRoutes(app: Express): Server {
       });
       // Optionally fetch the PR from DB for freshest data
       const prFromDb = await storage.getPurchaseRequest(pr.pr_number);
+      
+      // Create escalation matrix for this PR
+      try {
+        await storage.upsertEscalationMatrixForPR(pr.pr_number);
+        console.log(`Escalation matrix created for PR: ${pr.pr_number}`);
+        
+        // Verify escalation matrix was created
+        const escalationMatrix = await storage.getAllEscalationMatrix();
+        const createdMatrix = escalationMatrix.find((m: any) => m.pr_number === pr.pr_number);
+        if (createdMatrix) {
+          console.log(`Escalation matrix verified for PR: ${pr.pr_number}`, {
+            requester: createdMatrix.req_emp_name,
+            approver1: createdMatrix.approver_1_name,
+            approver2: createdMatrix.approver_2_name,
+            manager1: createdMatrix.manager_1_name,
+            manager2: createdMatrix.manager_2_name
+          });
+        } else {
+          console.warn(`Escalation matrix not found after creation for PR: ${pr.pr_number}`);
+        }
+      } catch (error) {
+        console.error('Error creating escalation matrix for PR:', pr.pr_number, error);
+        // Log more details about the error
+        if (error instanceof Error) {
+          console.error('Error details:', error.message);
+          console.error('Error stack:', error.stack);
+        }
+      }
+      
       // Send email to first approver
       try {
         const approvalMatrixList = await storage.getAllApprovalMatrix();
@@ -422,6 +455,9 @@ export function registerRoutes(app: Express): Server {
       if (!reqData) {
         return res.status(404).json({ message: "Purchase request not found" });
       }
+      // Fetch escalation matrix for this PR
+      const escalationMatrixList = await storage.getAllEscalationMatrix();
+      const escalation = escalationMatrixList.find((m: any) => m.pr_number === id) || null;
       // Map DB fields to API fields as in getAllPurchaseRequests
       const result = {
         id: String(reqData.pr_number),
@@ -451,6 +487,7 @@ export function registerRoutes(app: Express): Server {
           itemJustification: item.item_justification,
           vendor: item.vendors ? { vendorsearchname: item.vendors.vendorsearchname } : undefined,
         })),
+        escalation_matrix: escalation,
       };
       res.json(result);
     } catch (error) {
@@ -501,6 +538,8 @@ export function registerRoutes(app: Express): Server {
         updateData.status = 'pending';
         updateData.current_approval_level = 1;
         updateData.current_approver_emp_code = approvalMatrix.approver_1_emp_code;
+        // Clear escalation logs for this PR so escalation workflow restarts
+        await storage.clearEscalationLogsForPR(prNumber);
         // Log resubmission
         await storage.createAuditLog({
           pr_number: prNumber,
@@ -621,24 +660,64 @@ export function registerRoutes(app: Express): Server {
       const prNumber = req.params.id;
       const user = req.session.user;
       const comment = req.body.comment || null;
-      // Fetch the purchase request, approval matrix, and audit logs
+      
+      // Fetch the purchase request, approval matrix, escalation matrix, and audit logs
       const pr = await storage.getPurchaseRequest(prNumber);
       if (!pr) return res.status(404).json({ message: "Purchase request not found" });
+      
       const approvalMatrixList = await storage.getAllApprovalMatrix();
       const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(pr.requester_emp_code));
       if (!approvalMatrix) return res.status(400).json({ message: "Approval matrix not found for requester" });
+      
+      // Get escalation matrix
+      const escalationMatrixList = await storage.getAllEscalationMatrix();
+      const escalationMatrix = escalationMatrixList.find((m: any) => m.pr_number === prNumber);
+      
       const auditLogs = await storage.getAllApprovalHistory ? await storage.getAllApprovalHistory() : [];
       // Only consider audit logs for this PR
       const prAuditLogs = auditLogs.filter(l => l.pr_number === prNumber);
+      
       let currentLevel = pr.current_approval_level || 1;
       let currentApprover = pr.current_approver_emp_code;
       const isAdmin = user.role === 'admin';
-      // Only allow if user is current approver (from matrix) or admin
+      
+      // Check authorization with escalation support
       let allowed = false;
-      if (isAdmin) allowed = true;
-      else if (currentLevel === 1 && approvalMatrix.approver_1_emp_code === user.emp_code) allowed = true;
-      else if (currentLevel === 2 && approvalMatrix.approver_2_emp_code === user.emp_code) allowed = true;
-      else if (currentLevel === 3 && (approvalMatrix.approver_3a_emp_code === user.emp_code || approvalMatrix.approver_3b_emp_code === user.emp_code)) allowed = true;
+      if (isAdmin) {
+        allowed = true;
+      } else {
+        // Check if user is authorized based on current level and escalation status
+        if (currentLevel === 1) {
+          // At level 1, check if escalated to manager_1
+          const escalationLog = await storage.checkEscalationStatus(prNumber, 1);
+          
+          if (escalationLog) {
+            // Escalated: both approver_1 and manager_1 can approve
+            allowed = approvalMatrix.approver_1_emp_code === user.emp_code || 
+                     (escalationMatrix?.manager_1_code === user.emp_code);
+          } else {
+            // Not escalated: only approver_1 can approve
+            allowed = approvalMatrix.approver_1_emp_code === user.emp_code;
+          }
+        } else if (currentLevel === 2) {
+          // At level 2, check if escalated to manager_2
+          const escalationLog = await storage.checkEscalationStatus(prNumber, 2);
+          
+          if (escalationLog) {
+            // Escalated: both approver_2 and manager_2 can approve
+            allowed = approvalMatrix.approver_2_emp_code === user.emp_code || 
+                     (escalationMatrix?.manager_2_code === user.emp_code);
+          } else {
+            // Not escalated: only approver_2 can approve
+            allowed = approvalMatrix.approver_2_emp_code === user.emp_code;
+          }
+        } else if (currentLevel === 3) {
+          // Level 3: parallel approval
+          allowed = approvalMatrix.approver_3a_emp_code === user.emp_code || 
+                   approvalMatrix.approver_3b_emp_code === user.emp_code;
+        }
+      }
+      
       if (!allowed) {
         return res.status(403).json({ message: "You are not authorized to approve this request at this stage." });
       }
@@ -787,6 +866,17 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Approve request error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Test route for escalation (remove in production)
+  app.post("/api/test/escalation-check", requireAuth, requireRole(['admin']), async (req: any, res) => {
+    try {
+      await escalationService.manualEscalationCheck();
+      res.json({ message: "Escalation check completed" });
+    } catch (error) {
+      console.error("Escalation check error:", error);
+      res.status(500).json({ message: "Error during escalation check" });
     }
   });
 
