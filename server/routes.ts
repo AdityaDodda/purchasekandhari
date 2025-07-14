@@ -9,6 +9,8 @@ import fs from "fs";
 import { sendPasswordResetEmail } from "./email";
 import { PrismaClient } from "@prisma/client";
 import { escalationService } from "./escalation";
+import { generatePurchaseRequestExcel } from "./excelExport";
+import { sendExcelToRpaPoc } from "./email";
 
 const prisma = new PrismaClient();
 
@@ -331,6 +333,7 @@ export function registerRoutes(app: Express): Server {
       // Map frontend line items to backend fields
       const mappedLineItems = lineItems.map((item: any) => ({
         productname: item.itemName,
+        itemnumber: item.itemNumber || undefined,
         requiredquantity: Number(item.requiredQuantity),
         unit_of_measure: item.unitOfMeasure,
         vendoraccountnumber: item.vendor?.vendoraccountnumber || null,
@@ -338,6 +341,7 @@ export function registerRoutes(app: Express): Server {
         deliverylocation: item.deliveryLocation,
         estimated_cost: Number(item.estimatedCost),
         item_justification: item.itemJustification || null,
+        receiving_warehouse_id: item.receiving_warehouse_id || null,
       }));
       const pr = await storage.createPurchaseRequest({
         entity,
@@ -745,7 +749,13 @@ export function registerRoutes(app: Express): Server {
         } catch (err) {
           console.error(`[APPROVAL] ERROR creating audit log for admin override:`, err);
         }
-        // Removed email sending logic here
+        // Excel generation and email after admin override approval
+        try {
+          const filePath = await generatePurchaseRequestExcel(prNumber);
+          await sendExcelToRpaPoc(filePath, prNumber);
+        } catch (err) {
+          console.error(`[EXCEL EXPORT/EMAIL] ERROR generating or sending Excel for PR ${prNumber} (admin override):`, err);
+        }
         return res.json({ message: "Request approved by admin." });
       }
       // Normal approval flow
@@ -773,7 +783,13 @@ export function registerRoutes(app: Express): Server {
         } catch (err) {
           console.error(`[APPROVAL] ERROR creating audit log for final approval:`, err);
         }
-        // Removed email sending logic here
+        // Excel generation and email after final approval
+        try {
+          const filePath = await generatePurchaseRequestExcel(prNumber);
+          await sendExcelToRpaPoc(filePath, prNumber);
+        } catch (err) {
+          console.error(`[EXCEL EXPORT/EMAIL] ERROR generating or sending Excel for PR ${prNumber}:`, err);
+        }
         return res.json({ message: "Request fully approved." });
       } else {
         // Move to next approver/level
@@ -1312,6 +1328,44 @@ app.get("/api/escalation-matrix/:pr_number", async (req, res) => {
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to populate and save escalation matrix." });
+    }
+  });
+
+  // --- Warehouse Delivery Endpoints ---
+  app.get("/api/warehouses", async (req, res) => {
+    try {
+      const warehouses = await storage.getAllWarehouseDeliveries();
+      res.json(warehouses);
+    } catch (error) {
+      console.error("Error fetching warehouses:", error);
+      res.status(500).json({ message: "Failed to retrieve warehouses." });
+    }
+  });
+
+  app.get("/api/warehouses/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const warehouse = await storage.getWarehouseDelivery(id);
+      if (!warehouse) {
+        return res.status(404).json({ message: "Warehouse not found." });
+      }
+      res.json(warehouse);
+    } catch (error) {
+      console.error("Error fetching warehouse:", error);
+      res.status(500).json({ message: "Failed to retrieve warehouse." });
+    }
+  });
+
+  // --- Send Excel to rpapoc@kbl.net.in ---
+  app.post("/api/purchase-requests/:id/send-excel", requireAuth, async (req, res) => {
+    try {
+      const prNumber = req.params.id;
+      const filePath = await generatePurchaseRequestExcel(prNumber);
+      await sendExcelToRpaPoc(filePath, prNumber);
+      res.json({ success: true, message: `Excel sent to rpapoc@kbl.net.in for PR #${prNumber}` });
+    } catch (error) {
+      console.error("Error generating or sending Excel:", error);
+      res.status(500).json({ success: false, message: "Failed to generate or send Excel.", error: (error instanceof Error ? error.message : String(error)) });
     }
   });
 

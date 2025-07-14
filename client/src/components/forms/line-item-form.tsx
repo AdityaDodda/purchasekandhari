@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"; // Added useEffect
+import { useState, useRef, useEffect, useLayoutEffect } from "react"; // Added useEffect
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +27,7 @@ const vendorSchema = z.object({
 // Update the lineItemSchema to include the vendor field
 const lineItemSchema = z.object({
   itemName: z.string().min(1, "Item name is required"),
+  itemNumber: z.string().optional(),
   requiredQuantity: z.number().min(1, "Quantity must be at least 1"),
   unitOfMeasure: z.string().min(1, "Unit of measure is required"),
   requiredByDate: z.string().min(1, "Required by date is required"),
@@ -80,6 +81,15 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
   const [highlightedVendorIndex, setHighlightedVendorIndex] = useState<number>(-1);
   const vendorInputRef = useRef<HTMLInputElement>(null);
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
+
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/warehouses")
+      .then(res => res.json())
+      .then(data => setWarehouses(data));
+  }, []);
 
   const {
     register,
@@ -185,6 +195,25 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
     setOpen(false); 
   };
 
+  // For inventory dropdown auto-scroll
+  const inventoryItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // For vendor dropdown auto-scroll
+  const vendorItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Auto-scroll for inventory dropdown
+  useLayoutEffect(() => {
+    if (highlightedInventoryIndex >= 0 && inventoryItemRefs.current[highlightedInventoryIndex]) {
+      inventoryItemRefs.current[highlightedInventoryIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedInventoryIndex]);
+
+  // Auto-scroll for vendor dropdown
+  useLayoutEffect(() => {
+    if (highlightedVendorIndex >= 0 && vendorItemRefs.current[highlightedVendorIndex]) {
+      vendorItemRefs.current[highlightedVendorIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedVendorIndex]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -197,7 +226,13 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
         <DialogHeader>
           <DialogTitle>Add Line Item</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleSubmit((data) => {
+          // Attach warehouse info to form data
+          data.receiving_warehouse_id = getValues("receiving_warehouse_id");
+          data.receiving_warehouse_address = selectedWarehouse?.deliveryaddress || "";
+          onAddItem(data);
+          setOpen(false);
+        })} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <Label htmlFor="itemName">Item Name *</Label>
@@ -219,15 +254,19 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                 {/* Dropdown for inventory search */}
                 {itemSearch && filteredInventory.length > 0 && (
                   <div className="absolute z-10 left-0 right-0 bg-white border rounded shadow max-h-48 overflow-y-auto mt-1">
-                    {filteredInventory.map((item: any) => (
+                    {filteredInventory.map((item: any, idx: number) => (
                       <div
                         key={item.itemnumber}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                        ref={el => inventoryItemRefs.current[idx] = el}
+                        className={`px-4 py-2 hover:bg-gray-100 cursor-pointer ${highlightedInventoryIndex === idx ? "bg-blue-100" : ""}`}
                         onMouseDown={() => { // Use onMouseDown to prevent onBlur from closing dropdown
                           setValue("itemName", item.productname || item.itemnumber, { shouldValidate: true });
+                          setValue("itemNumber", item.itemnumber || "", { shouldValidate: true });
                           setValue("unitOfMeasure", item.bomunitsymbol || "", { shouldValidate: true });
                           setItemSearch(item.productname || item.itemnumber); // Update itemSearch to reflect selection
                         }}
+                        onMouseEnter={() => setHighlightedInventoryIndex(idx)}
+                        onMouseLeave={() => setHighlightedInventoryIndex(-1)}
                       >
                         <div className="font-medium">{item.productname || item.itemnumber}</div>
                         <div className="text-xs text-gray-500">Code: {item.itemnumber}</div>
@@ -310,6 +349,7 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                     {(vendorSearchTerm.length > 0 ? vendorSearchResults : allVendors).map((vendor: any, idx: number) => (
                       <div
                         key={vendor.vendoraccountnumber}
+                        ref={el => vendorItemRefs.current[idx] = el}
                         className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${highlightedVendorIndex === idx ? "bg-blue-100" : ""}`}
                         onMouseEnter={() => setHighlightedVendorIndex(idx)}
                         onMouseLeave={() => setHighlightedVendorIndex(-1)}
@@ -334,6 +374,42 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Receiving Warehouse Dropdown and Address (after vendor, before item justification) */}
+            <div>
+              <Label htmlFor="receiving_warehouse_id">Receiving Warehouse *</Label>
+              <select
+                id="receiving_warehouse_id"
+                {...register("receiving_warehouse_id", { required: true })}
+                className="border rounded px-3 py-2 w-full"
+                onChange={e => {
+                  setValue("receiving_warehouse_id", e.target.value, { shouldValidate: true });
+                  const wh = warehouses.find(w => w.receiving_warehouse_id === e.target.value);
+                  setSelectedWarehouse(wh);
+                }}
+                value={getValues("receiving_warehouse_id") || ""}
+              >
+                <option value="">Select Warehouse</option>
+                {warehouses.map(wh => (
+                  <option key={wh.receiving_warehouse_id} value={wh.receiving_warehouse_id}>
+                    {wh.receiving_warehouse_id}
+                  </option>
+                ))}
+              </select>
+              {errors.receiving_warehouse_id && (
+                <p className="text-sm text-destructive mt-1">Warehouse is required</p>
+              )}
+            </div>
+            <div>
+              <Label>Warehouse Address</Label>
+              <input
+                type="text"
+                value={selectedWarehouse?.formatted_delivery_address || ""}
+                readOnly
+                className="bg-gray-100 border rounded px-3 py-2 w-full"
+                placeholder="Address"
+              />
             </div>
 
             <div>

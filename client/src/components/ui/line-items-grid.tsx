@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react"; // Added useEffect
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react"; // Added useEffect
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Edit2, Trash2, Package, AlertCircle, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,7 @@ interface Vendor {
 interface LineItem {
   id?: number; // Optional ID for existing items
   itemName: string;
+  itemNumber?: string;
   requiredQuantity: string | number;
   unitOfMeasure: string;
   requiredByDate: string;
@@ -31,6 +32,8 @@ interface LineItem {
   estimatedCost: string | number;
   itemJustification?: string;
   vendor?: Vendor | null; // Changed from 'any' to specific Vendor type or null
+  receiving_warehouse_id?: string;
+  receiving_warehouse_address?: string;
 }
 
 interface LineItemsGridProps {
@@ -52,6 +55,14 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
   const [highlightedVendorIndex, setHighlightedVendorIndex] = useState<number>(-1); // For vendor dropdown
   const vendorInputRef = useRef<HTMLInputElement>(null); // For vendor input
   const [showVendorDropdown, setShowVendorDropdown] = useState(false); // For vendor dropdown visibility
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/warehouses")
+      .then(res => res.json())
+      .then(data => setWarehouses(data));
+  }, []);
 
   // Form data for the current item being added/edited
   const [formData, setFormData] = useState<LineItem>({
@@ -256,6 +267,25 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
     return `${day}-${month}-${year}`;
   }
 
+  // For inventory dropdown auto-scroll
+  const inventoryItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // For vendor dropdown auto-scroll
+  const vendorItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Auto-scroll for inventory dropdown
+  useLayoutEffect(() => {
+    if (highlightedIndex >= 0 && inventoryItemRefs.current[highlightedIndex]) {
+      inventoryItemRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedIndex]);
+
+  // Auto-scroll for vendor dropdown
+  useLayoutEffect(() => {
+    if (highlightedVendorIndex >= 0 && vendorItemRefs.current[highlightedVendorIndex]) {
+      vendorItemRefs.current[highlightedVendorIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedVendorIndex]);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -330,6 +360,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                         {filteredInventory.map((item: any, idx: number) => (
                           <div
                             key={item.itemnumber}
+                            ref={el => inventoryItemRefs.current[idx] = el}
                             className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${highlightedIndex === idx ? "bg-blue-100" : ""}`}
                             onMouseEnter={() => setHighlightedIndex(idx)}
                             onMouseLeave={() => setHighlightedIndex(-1)}
@@ -510,6 +541,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                         {(vendorSearchTerm.length > 0 ? vendorSearchResults : allVendors).map((vendor: Vendor, idx: number) => (
                           <div
                             key={vendor.vendoraccountnumber}
+                            ref={el => vendorItemRefs.current[idx] = el}
                             className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${highlightedVendorIndex === idx ? "bg-blue-100" : ""}`}
                             onMouseEnter={() => setHighlightedVendorIndex(idx)}
                             onMouseLeave={() => setHighlightedVendorIndex(-1)}
@@ -534,7 +566,38 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     )}
                   </div>
                 </div>
-                <div className="md:col-span-2">
+                {/* Receiving Warehouse Dropdown and Address (after vendor, before item justification) */}
+                <div>
+                  <Label htmlFor="receiving_warehouse_id">Receiving Warehouse *</Label>
+                  <select
+                    id="receiving_warehouse_id"
+                    value={formData.receiving_warehouse_id || ""}
+                    onChange={e => {
+                      setFormData({ ...formData, receiving_warehouse_id: e.target.value });
+                      const wh = warehouses.find(w => w.receiving_warehouse_id === e.target.value);
+                      setSelectedWarehouse(wh);
+                    }}
+                    className="border rounded px-3 py-2 w-full"
+                  >
+                    <option value="">Select Warehouse</option>
+                    {warehouses.map(wh => (
+                      <option key={wh.receiving_warehouse_id} value={wh.receiving_warehouse_id}>
+                        {wh.receiving_warehouse_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Warehouse Address</Label>
+                  <input
+                    type="text"
+                    value={selectedWarehouse?.formatted_delivery_address || ""}
+                    readOnly
+                    className="bg-gray-100 border rounded px-3 py-2 w-full"
+                    placeholder="Address"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="itemJustification">Item Justification</Label>
                   <Textarea
                     id="itemJustification"
@@ -586,6 +649,8 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <th className="text-left p-3 font-semibold text-sm border-r">Required By</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Location</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Item Cost (₹)</th>
+                    <th className="text-left p-3 font-semibold text-sm border-r">Warehouse ID</th>
+                    {/* <th className="text-left p-3 font-semibold text-sm">Warehouse Address</th> */}
                     {editable && <th className="text-center p-3 font-semibold text-sm">Actions</th>}
                   </tr>
                 </thead>
@@ -613,6 +678,8 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                       <td className="p-3 border-r text-sm text-gray-600">
                         {formatCurrency(item.estimatedCost)}
                       </td>
+                      <td className="p-3 border-r text-sm">{item.receiving_warehouse_id}</td>
+                      {/* <td className="p-3 border-r text-sm">{item.receiving_warehouse_address}</td> */}
                       {editable && (
                         <td className="p-3 text-center">
                           <div className="flex justify-center space-x-1">

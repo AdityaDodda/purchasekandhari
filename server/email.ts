@@ -44,3 +44,35 @@ export async function sendPasswordResetEmail(to: string, resetLink: string) {
     console.error("Error sending password reset email:", error);
   }
 }
+
+export async function sendExcelToRpaPoc(filePath: string, prNumber: string) {
+  const mailOptions = {
+    from: `"Purchase Request System" <${EMAIL_USER}>`,
+    to: "adityasreedodda@gmail.com",
+    subject: `Purchase Request Upload`,
+    // html: `<p>Please find attached the Excel for PR <b>${prNumber}</b>.</p>`,
+    attachments: [
+      {
+        filename: `${prNumber}.xlsx`,
+        path: filePath,
+      },
+    ],
+  };
+
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    console.log("--- Email not sent. Credentials missing. ---");
+    console.log("To:", mailOptions.to);
+    console.log("Subject:", mailOptions.subject);
+    // console.log("Body:", mailOptions.html);
+    console.log("Attachment:", filePath);
+    console.log("---------------------------------------------");
+    return;
+  }
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Excel email sent to:", mailOptions.to);
+  } catch (error) {
+    console.error("Error sending Excel email:", error);
+  }
+}

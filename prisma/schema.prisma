@@ -135,7 +135,9 @@ model line_items {
   vendoraccountnumber                String?            @db.VarChar
   requiredbydate                     DateTime?          @db.Date
   deliverylocation                   String?            @db.VarChar(100)
+  receiving_warehouse_id             String?            @db.VarChar(50)
   estimated_cost                     Decimal?           @db.Decimal(12, 2)
+  item_number                        String?
   item_justification                 String?
   created_by                         String?            @db.VarChar(30)
   updated_by                         String?            @db.VarChar(30)

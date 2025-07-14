@@ -1,5 +1,6 @@
 export interface LineItemFormData {
   itemName: string;
+  itemNumber?: string;
   requiredQuantity: number;
   unitOfMeasure: string;
   requiredByDate: string;
@@ -7,6 +8,8 @@ export interface LineItemFormData {
   estimatedCost: number;
   itemJustification?: string;
   vendor?: any;
+  receiving_warehouse_id?: string;
+  receiving_warehouse_address?: string;
 }
 
 export interface PurchaseRequestFormData {
@@ -127,6 +130,7 @@ export interface LineItem {
   id: number;
   purchaseRequestId: number;
   itemName: string;
+  itemNumber?: string;
   requiredQuantity: number;
   unitOfMeasure: string;
   requiredByDate: string;
@@ -137,6 +141,8 @@ export interface LineItem {
   stockLocation?: string;
   createdAt?: string;
   vendor?: any;
+  receiving_warehouse_id?: string;
+  receiving_warehouse_address?: string;
 }
 
 export interface Attachment {

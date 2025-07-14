@@ -196,3 +196,6 @@ RECEIVINGSITEID T2 receivingsiteid (warehouse_delivery)
 RECEIVINGWAREHOUSEID U2 receivingwarehouseid (warehouse_delivery)
 REQUESTEDPURCHASEQUANTITY V2 requiredquantity (line_items)
 REQUISITIONERPERSONNELNUMBER W2 blank
+
+
+TRUNCATE TABLE purchase_requests,line_items,attachments,pr_escalation_logs,escalation_matrix,audit_logs;

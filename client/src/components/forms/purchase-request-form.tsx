@@ -201,6 +201,7 @@ export function PurchaseRequestForm({ currentStep, onStepChange, onSubmit, initi
       ...item,
       requiredQuantity: Number(item.requiredQuantity),
       estimatedCost: Number(item.estimatedCost),
+      itemNumber: item.itemNumber || undefined,
     }));
 
     const requestData = {

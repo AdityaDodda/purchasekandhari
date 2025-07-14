@@ -82,6 +82,7 @@ export interface IStorage {
     status?: string;
     lineItems: Array<{
       productname: string;
+      itemnumber: string;
       requiredquantity: number;
       unit_of_measure: string;
       vendoraccountnumber: string;
@@ -89,6 +90,7 @@ export interface IStorage {
       deliverylocation: string;
       estimated_cost: number;
       item_justification?: string;
+      receiving_warehouse_id?: string;
     }>;
   }): Promise<any>;
   generateRequisitionNumber(entity: string): Promise<string>;
@@ -249,6 +251,7 @@ export class DatabaseStorage implements IStorage {
     status?: string;
     lineItems: Array<{
       productname: string;
+      itemnumber: string;
       requiredquantity: number;
       unit_of_measure: string;
       vendoraccountnumber: string;
@@ -256,6 +259,7 @@ export class DatabaseStorage implements IStorage {
       deliverylocation: string;
       estimated_cost: number;
       item_justification?: string;
+      receiving_warehouse_id?: string;
     }>;
   }): Promise<any> {
     const pr_number = await this.generateRequisitionNumber(data.entity);
@@ -297,11 +301,17 @@ export class DatabaseStorage implements IStorage {
       });
       
       const lineItems = await Promise.all(
-        data.lineItems.map(item =>
-          tx.line_items.create({
+        data.lineItems.map(async item => {
+          let itemnumber = item.itemnumber;
+          if (!itemnumber && item.productname) {
+            const inventoryItem = await tx.inventory.findFirst({ where: { productname: item.productname } });
+            itemnumber = inventoryItem?.itemnumber || "";
+          }
+          return tx.line_items.create({
             data: {
               pr_number,
               productname: item.productname,
+              item_number: itemnumber,
               requiredquantity: item.requiredquantity,
               unit_of_measure: item.unit_of_measure,
               vendoraccountnumber: item.vendoraccountnumber,
@@ -309,11 +319,12 @@ export class DatabaseStorage implements IStorage {
               deliverylocation: item.deliverylocation,
               estimated_cost: item.estimated_cost,
               item_justification: item.item_justification || null,
+              receiving_warehouse_id: item.receiving_warehouse_id || null,
               created_by: data.createdBy,
               updated_by: data.updatedBy,
             },
-          })
-        )
+          });
+        })
       );
       
       // Create escalation matrix for this PR
@@ -1138,6 +1149,40 @@ async populateEscalationMatrixForPR(pr_number: string): Promise<any> {
   // Clear escalation logs for a PR (used when resubmitting a returned request)
   async clearEscalationLogsForPR(pr_number: string): Promise<void> {
     await this.prisma.pr_escalation_logs.deleteMany({ where: { pr_number } });
+  }
+
+  // --- Warehouse Delivery ---
+  async getWarehouseDelivery(receiving_warehouse_id: string) {
+    return this.prisma.warehouse_delivery.findUnique({ where: { receiving_warehouse_id } });
+  }
+  async getAllWarehouseDeliveries() {
+    return this.prisma.warehouse_delivery.findMany();
+  }
+  async createWarehouseDelivery(data: any) {
+    return this.prisma.warehouse_delivery.create({ data });
+  }
+  async updateWarehouseDelivery(receiving_warehouse_id: string, data: any) {
+    return this.prisma.warehouse_delivery.update({ where: { receiving_warehouse_id }, data });
+  }
+  async deleteWarehouseDelivery(receiving_warehouse_id: string) {
+    return this.prisma.warehouse_delivery.delete({ where: { receiving_warehouse_id } });
+  }
+
+  // --- Employee Entity ---
+  async getEmployeeEntity(personnel_number: string) {
+    return this.prisma.employee_entity.findUnique({ where: { personnel_number } });
+  }
+  async getAllEmployeeEntities() {
+    return this.prisma.employee_entity.findMany();
+  }
+  async createEmployeeEntity(data: any) {
+    return this.prisma.employee_entity.create({ data });
+  }
+  async updateEmployeeEntity(personnel_number: string, data: any) {
+    return this.prisma.employee_entity.update({ where: { personnel_number }, data });
+  }
+  async deleteEmployeeEntity(personnel_number: string) {
+    return this.prisma.employee_entity.delete({ where: { personnel_number } });
   }
 }
 
