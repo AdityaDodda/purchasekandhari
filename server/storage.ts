@@ -844,7 +844,7 @@ export class DatabaseStorage implements IStorage {
       'itemnumber', 'productname', 'productdescription', 'productnumber', 'searchname',
       'bomunitsymbol', 'inventoryreservationhierarchyname', 'inventoryunitsymbol',
       'iscatchweightproduct', 'isproductkit', 'itemmodelgroupid', 'lowerwarrantablepricerangelimit',
-      'productdimensiongroupname', 'productgroupid', 'productsearchname', 'productsubtype',
+      'productcategoryname','productdimensiongroupname', 'productgroupid', 'productsearchname', 'productsubtype',
       'producttype', 'purchasesalestaxitemgroupcode', 'purchaseunitsymbol', 'retailproductcategoryname',
       'salessalestaxitemgroupcode', 'salesunitsymbol', 'servicetype', 'storagedimensiongroupname',
       'trackingdimensiongroupname', 'upperwarrantablepricerangelimit', 'variantconfigurationtechnology',
@@ -1155,7 +1155,10 @@ async populateEscalationMatrixForPR(pr_number: string): Promise<any> {
   async getWarehouseDelivery(receiving_warehouse_id: string) {
     return this.prisma.warehouse_delivery.findUnique({ where: { receiving_warehouse_id } });
   }
-  async getAllWarehouseDeliveries() {
+  async getAllWarehouseDeliveries(entity?: string) {
+    if (entity) {
+      return this.prisma.warehouse_delivery.findMany({ where: { buying_legal_entity_id: entity } });
+    }
     return this.prisma.warehouse_delivery.findMany();
   }
   async createWarehouseDelivery(data: any) {

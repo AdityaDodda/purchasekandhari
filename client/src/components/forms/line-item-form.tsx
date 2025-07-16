@@ -16,6 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { formatDate } from "@/lib/utils"; // Assuming this is correctly implemented
 import { useQuery } from "@tanstack/react-query";
+import type { User } from "@/lib/types";
 
 // Define a Zod schema for the Vendor type
 const vendorSchema = z.object({
@@ -85,11 +86,15 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
 
+  const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+
   useEffect(() => {
-    fetch("/api/warehouses")
-      .then(res => res.json())
-      .then(data => setWarehouses(data));
-  }, []);
+    if (user?.entity) {
+      fetch(`/api/warehouses?entity=${encodeURIComponent(user.entity)}`)
+        .then(res => res.json())
+        .then(data => setWarehouses(data));
+    }
+  }, [user]);
 
   const {
     register,

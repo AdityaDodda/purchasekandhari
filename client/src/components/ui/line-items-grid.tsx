@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import type { User } from "@/lib/types";
 
 // Define a type for Vendor
 interface Vendor {
@@ -58,11 +59,15 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null);
 
+  const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+
   useEffect(() => {
-    fetch("/api/warehouses")
-      .then(res => res.json())
-      .then(data => setWarehouses(data));
-  }, []);
+    if (user?.entity) {
+      fetch(`/api/warehouses?entity=${encodeURIComponent(user.entity)}`)
+        .then(res => res.json())
+        .then(data => setWarehouses(data));
+    }
+  }, [user]);
 
   // Form data for the current item being added/edited
   const [formData, setFormData] = useState<LineItem>({
@@ -545,7 +550,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                             className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${highlightedVendorIndex === idx ? "bg-blue-100" : ""}`}
                             onMouseEnter={() => setHighlightedVendorIndex(idx)}
                             onMouseLeave={() => setHighlightedVendorIndex(-1)}
-                            onClick={() => {
+                            onMouseDown={() => {
                               setFormData({ ...formData, vendor });
                               setVendorSearchTerm(vendor.vendorsearchname); // Update input field to selected name
                               setHighlightedVendorIndex(-1);

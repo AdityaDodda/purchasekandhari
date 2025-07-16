@@ -253,6 +253,7 @@ export default function AdminMasters() {
             { key: 'isproductkit', label: 'Is Product Kit', type: 'checkbox' },
             { key: 'itemmodelgroupid', label: 'Item Model Group ID' },
             { key: 'lowerwarrantablepricerangelimit', label: 'Lower Warrantable Price Range Limit', type: 'number' },
+            { key: 'productcategoryname', label: 'Product Category Name' },
             { key: 'productdescription', label: 'Product Description' },
             { key: 'productdimensiongroupname', label: 'Product Dimension Group Name' },
             { key: 'productgroupid', label: 'Product Group ID' },

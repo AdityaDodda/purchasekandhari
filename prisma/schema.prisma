@@ -74,6 +74,7 @@ model inventory {
   isproductkit                      Boolean?
   itemmodelgroupid                  String?
   lowerwarrantablepricerangelimit   Decimal? @db.Decimal
+  productcategoryname               String?
   productdescription                String?
   productdimensiongroupname         String?
   productgroupid                    String?

@@ -11,6 +11,7 @@ import { PrismaClient } from "@prisma/client";
 import { escalationService } from "./escalation";
 import { generatePurchaseRequestExcel } from "./excelExport";
 import { sendExcelToRpaPoc } from "./email";
+import { sendApprovalRequestEmail } from './email';
 
 const prisma = new PrismaClient();
 
@@ -391,15 +392,15 @@ export function registerRoutes(app: Express): Server {
       
       // Send email to first approver
       try {
-        const approvalMatrixList = await storage.getAllApprovalMatrix();
-        const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(requesterEmpCode) || (m.department === department && m.site === location));
-        if (approvalMatrix && approvalMatrix.approver_1_emp_code) {
-          const approver = await storage.getUserByEmployeeNumber(approvalMatrix.approver_1_emp_code);
-          const requesterUser = await storage.getUserByEmployeeNumber(requesterEmpCode);
-          const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
-          if (approver && typeof approver.email === 'string') {
-            const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${pr.pr_number}`;
-          }
+        const escalationMatrixList = await storage.getAllEscalationMatrix();
+        const escalationMatrix = escalationMatrixList.find((m: any) => m.pr_number === pr.pr_number);
+        if (escalationMatrix && escalationMatrix.approver_1_mail) {
+          await sendApprovalRequestEmail(
+            escalationMatrix.approver_1_mail,
+            pr.pr_number,
+            escalationMatrix.req_emp_name || '',
+            1
+          );
         }
       } catch (err) {
         console.error('Error sending email to first approver:', err);
@@ -557,16 +558,15 @@ export function registerRoutes(app: Express): Server {
       // If resubmitted from returned, send email to first approver
       if (pr.status === 'returned') {
         try {
-          const updatedPr = await storage.getPurchaseRequest(prNumber);
-          const approvalMatrixList = await storage.getAllApprovalMatrix();
-          const approvalMatrix = approvalMatrixList.find((m: any) => String(m.emp_code) === String(updatedPr.requester_emp_code));
-          if (approvalMatrix && approvalMatrix.approver_1_emp_code) {
-            const approver = await storage.getUserByEmployeeNumber(approvalMatrix.approver_1_emp_code);
-            const requesterUser = await storage.getUserByEmployeeNumber(updatedPr.requester_emp_code);
-            const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
-            if (approver && typeof approver.email === 'string') {
-              const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${prNumber}`;
-            }
+          const escalationMatrixList = await storage.getAllEscalationMatrix();
+          const escalationMatrix = escalationMatrixList.find((m: any) => m.pr_number === prNumber);
+          if (escalationMatrix && escalationMatrix.approver_1_mail) {
+            await sendApprovalRequestEmail(
+              escalationMatrix.approver_1_mail,
+              prNumber,
+              escalationMatrix.req_emp_name || '',
+              1
+            );
           }
         } catch (err) {
           console.error('Error sending email to first approver on resubmission:', err);
@@ -867,11 +867,35 @@ export function registerRoutes(app: Express): Server {
           }
           // Send email to next approver
           try {
-            const nextApproverUser = await storage.getUserByEmployeeNumber(nextApprover);
-            const requesterUser = await storage.getUserByEmployeeNumber(pr.requester_emp_code);
-            const requesterName = requesterUser && typeof requesterUser.name === 'string' ? requesterUser.name : '';
-            if (nextApproverUser && typeof nextApproverUser.email === 'string') {
-              const approvalLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/approve/${prNumber}`;
+            const escalationMatrixList = await storage.getAllEscalationMatrix();
+            const escalationMatrix = escalationMatrixList.find((m: any) => m.pr_number === prNumber);
+            if (Array.isArray(nextApprover)) {
+              // Parallel approval: send to both 3a and 3b
+              if (escalationMatrix) {
+                const toList = [escalationMatrix.approver_3a_mail, escalationMatrix.approver_3b_mail].filter(Boolean);
+                for (const to of toList) {
+                  await sendApprovalRequestEmail(
+                    to,
+                    prNumber,
+                    escalationMatrix.req_emp_name || '',
+                    3
+                  );
+                }
+              }
+            } else {
+              // Single next approver
+              let level = nextLevel;
+              let to = null;
+              if (level === 2 && escalationMatrix) to = escalationMatrix.approver_2_mail;
+              if (level === 3 && escalationMatrix) to = escalationMatrix.approver_3a_mail || escalationMatrix.approver_3b_mail;
+              if (to && escalationMatrix) {
+                await sendApprovalRequestEmail(
+                  to,
+                  prNumber,
+                  escalationMatrix.req_emp_name || '',
+                  level
+                );
+              }
             }
           } catch (err) {
             console.error('Error sending email to next approver:', err);
@@ -1334,7 +1358,8 @@ app.get("/api/escalation-matrix/:pr_number", async (req, res) => {
   // --- Warehouse Delivery Endpoints ---
   app.get("/api/warehouses", async (req, res) => {
     try {
-      const warehouses = await storage.getAllWarehouseDeliveries();
+      const entity = req.query.entity as string | undefined;
+      const warehouses = await storage.getAllWarehouseDeliveries(entity);
       res.json(warehouses);
     } catch (error) {
       console.error("Error fetching warehouses:", error);

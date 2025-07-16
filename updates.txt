@@ -199,3 +199,54 @@ REQUISITIONERPERSONNELNUMBER W2 blank
 
 
 TRUNCATE TABLE purchase_requests,line_items,attachments,pr_escalation_logs,escalation_matrix,audit_logs;
+
+DATABASE_URL
+SESSION_SECRET="some_long_random_string_of_characters_and_numbers_12345"
+SMTP_HOST="smtp.office365.com"
+SMTP_PORT="587"
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM
+AZURE_APPLICATION_ID
+AZURE_TENANT_ID
+AZURE_VALUE
+AZURE_SECRET_ID
+
+CBX0000033 CBX/PAD/TRAY
+SFR0000018	SHRINK FILM
+
+Inventory Table Updated DB 
+CREATE TABLE inventory (
+  itemnumber TEXT PRIMARY KEY,
+  bomunitsymbol TEXT,
+  inventoryreservationhierarchyname TEXT,
+  inventoryunitsymbol TEXT,
+  iscatchweightproduct BOOLEAN,
+  isproductkit BOOLEAN,
+  itemmodelgroupid TEXT,
+  lowerwarrantablepricerangelimit NUMERIC,
+  productcategoryname TEXT,
+  productdescription TEXT,
+  productdimensiongroupname TEXT,
+  productgroupid TEXT,
+  productname TEXT,
+  productnumber TEXT,
+  productsearchname TEXT,
+  productsubtype TEXT,
+  producttype TEXT,
+  purchasesalestaxitemgroupcode TEXT,
+  purchaseunitsymbol TEXT,
+  retailproductcategoryname TEXT,
+  salessalestaxitemgroupcode TEXT,
+  salesunitsymbol TEXT,
+  searchname TEXT,
+  servicetype TEXT,
+  storagedimensiongroupname TEXT,
+  trackingdimensiongroupname TEXT,
+  upperwarrantablepricerangelimit NUMERIC,
+  variantconfigurationtechnology TEXT,
+  warrantablepricerangebasetype TEXT,
+  warrantydurationtime INTEGER,
+  warrantydurationtimeunit TEXT
+);
+

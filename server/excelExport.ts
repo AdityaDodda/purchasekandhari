@@ -49,7 +49,7 @@ export async function generatePurchaseRequestExcel(prNumber: string): Promise<st
     }
     // Write mapped fields (prefer line_items fields, fallback to inventory if needed)
     lineItemsSheet[`A${row}`] = { t: 's', v: item.pr_number || '' };
-    lineItemsSheet[`B${row}`] = { t: 'n', v: item.id };
+    lineItemsSheet[`B${row}`] = { t: 'n', v: i + 1 };
     lineItemsSheet[`C${row}`] = { t: 's', v: prData.request_date ? new Date(prData.request_date).toISOString().split('T')[0] : '' };
     lineItemsSheet[`D${row}`] = { t: 's', v: prData.users_purchase_requests_created_byTousers?.entity || '' };
     lineItemsSheet[`E${row}`] = { t: 's', v: 'INR' };
@@ -64,13 +64,14 @@ export async function generatePurchaseRequestExcel(prNumber: string): Promise<st
     lineItemsSheet[`N${row}`] = { t: 's', v: item.productname || inventoryData?.productname || '' };
     lineItemsSheet[`O${row}`] = { t: 's', v: prData.status || '' };
     lineItemsSheet[`P${row}`] = { t: 's', v: inventoryData?.producttype || '' };
-    lineItemsSheet[`Q${row}`] = { t: 's', v: inventoryData?.productsearchname || '' };
+    lineItemsSheet[`Q${row}`] = { t: 's', v: inventoryData?.productcategoryname || '' };
     lineItemsSheet[`R${row}`] = { t: 's', v: inventoryData?.inventoryunitsymbol || '' };
     lineItemsSheet[`S${row}`] = { t: 's', v: prData.department || '' };
     lineItemsSheet[`T${row}`] = { t: 's', v: warehouse?.receiving_site_id || '' };
     lineItemsSheet[`U${row}`] = { t: 's', v: warehouse?.receiving_warehouse_id || '' };
     lineItemsSheet[`V${row}`] = { t: 'n', v: item.requiredquantity || 0 };
     lineItemsSheet[`W${row}`] = { t: 's', v: '' };
+    lineItemsSheet[`X${row}`] = { t: 's', v: item.vendoraccountnumber || '' };
   }
 
   // 4. Save as {prNumber}.xlsx

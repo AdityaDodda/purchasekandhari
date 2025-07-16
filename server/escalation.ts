@@ -1,6 +1,7 @@
 import { schedule, ScheduledTask } from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import { storage } from './storage';
+import { sendEscalationEmail, sendRejectionEmail } from './email';
 
 const prisma = new PrismaClient();
 
@@ -217,8 +218,15 @@ class EscalationService {
 
       console.log(`Escalated PR ${request.pr_number} to manager_1`);
       
-      // TODO: Send email notification to manager_1
-      // await sendEscalationEmail(escalationMatrix.manager_1_mail, request.pr_number, 'manager_1');
+      // TODO: Send email notification to manager_1, approver_1, requester
+      if (escalationMatrix) {
+        const toList = [
+          escalationMatrix.approver_1_mail,
+          escalationMatrix.manager_1_mail,
+          escalationMatrix.req_emp_mail
+        ].filter(Boolean);
+        await sendEscalationEmail(toList, request.pr_number, 1, 12);
+      }
       
     } catch (error) {
       console.error(`Error escalating PR ${request.pr_number} to manager_1:`, error);
@@ -251,8 +259,16 @@ class EscalationService {
 
       console.log(`Escalated PR ${request.pr_number} to manager_2`);
       
-      // TODO: Send email notification to manager_2
-      // await sendEscalationEmail(escalationMatrix.manager_2_mail, request.pr_number, 'manager_2');
+      // TODO: Send email notification to manager_2, approver_2, approver_1, requester
+      if (escalationMatrix) {
+        const toList = [
+          escalationMatrix.approver_2_mail,
+          escalationMatrix.manager_2_mail,
+          escalationMatrix.manager_1_mail,
+          escalationMatrix.req_emp_mail
+        ].filter(Boolean);
+        await sendEscalationEmail(toList, request.pr_number, 2, 12);
+      }
       
     } catch (error) {
       console.error(`Error escalating PR ${request.pr_number} to manager_2:`, error);
@@ -285,8 +301,18 @@ class EscalationService {
 
       console.log(`Rejected PR ${request.pr_number}: ${reason}`);
       
-      // TODO: Send email notification to requester
-      // await sendRejectionEmail(request.requester_emp_code, request.pr_number, reason);
+      // TODO: Send email notification to final approver, approver_2, approver_1, requester
+      if (request.escalation_matrix) {
+        const em = request.escalation_matrix;
+        const toList = [
+          em.approver_3a_mail,
+          em.approver_3b_mail,
+          em.approver_2_mail,
+          em.approver_1_mail,
+          em.req_emp_mail
+        ].filter(Boolean);
+        await sendRejectionEmail(toList, request.pr_number, reason);
+      }
       
     } catch (error) {
       console.error(`Error rejecting PR ${request.pr_number}:`, error);
