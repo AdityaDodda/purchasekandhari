@@ -7,7 +7,7 @@ import type {
   departments as Department,
   sites as Site,
   inventory as InventoryModel,
-  vendors as VendorModel, // NEW: Import vendors model
+  vendors as VendorModel,
 } from "@prisma/client";
 
 // Explicit 'any' types for models not present in your schema.prisma

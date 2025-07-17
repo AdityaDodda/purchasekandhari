@@ -250,3 +250,4 @@ CREATE TABLE inventory (
   warrantydurationtimeunit TEXT
 );
 
+escalation mail link

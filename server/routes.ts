@@ -12,6 +12,7 @@ import { escalationService } from "./escalation";
 import { generatePurchaseRequestExcel } from "./excelExport";
 import { sendExcelToRpaPoc } from "./email";
 import { sendApprovalRequestEmail } from './email';
+import { generateBulkTemplateXLSX, masterFields } from "./bulkTemplateUtil";
 
 const prisma = new PrismaClient();
 
@@ -1355,7 +1356,23 @@ app.get("/api/escalation-matrix/:pr_number", async (req, res) => {
     }
   });
 
-  // --- Warehouse Delivery Endpoints ---
+  // Bulk Import Template Download Endpoint
+  app.get("/api/admin/masters/:type/template", (req, res) => {
+    const { type } = req.params;
+    try {
+      if (!masterFields[type]) {
+        return res.status(400).json({ error: "Unknown master type" });
+      }
+      const buffer = generateBulkTemplateXLSX(type);
+      res.setHeader("Content-Disposition", `attachment; filename=${type}-template.xlsx`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.send(buffer);
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // Warehouse Delivery Endpoints
   app.get("/api/warehouses", async (req, res) => {
     try {
       const entity = req.query.entity as string | undefined;

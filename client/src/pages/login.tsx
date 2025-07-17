@@ -217,12 +217,12 @@ export default function Login() {
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+              {/* <div className="flex items-center space-x-2">
                 <Checkbox id="rememberMe" {...register("rememberMe")} />
                 <Label htmlFor="rememberMe" className="text-sm">
                   Remember me
                 </Label>
-              </div>
+              </div> */}
               <a
                 href="/forgot-password"
                 className="text-sm text-[hsl(207,90%,54%)] hover:underline"

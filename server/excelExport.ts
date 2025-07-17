@@ -64,14 +64,15 @@ export async function generatePurchaseRequestExcel(prNumber: string): Promise<st
     lineItemsSheet[`N${row}`] = { t: 's', v: item.productname || inventoryData?.productname || '' };
     lineItemsSheet[`O${row}`] = { t: 's', v: prData.status || '' };
     lineItemsSheet[`P${row}`] = { t: 's', v: inventoryData?.producttype || '' };
-    lineItemsSheet[`Q${row}`] = { t: 's', v: inventoryData?.productcategoryname || '' };
+    lineItemsSheet[`Q${row}`] = { t: 's', v: 'miscellaneous' };
+    // lineItemsSheet[`Q${row}`] = { t: 's', v: inventoryData?.productcategoryname || '' };
     lineItemsSheet[`R${row}`] = { t: 's', v: inventoryData?.inventoryunitsymbol || '' };
     lineItemsSheet[`S${row}`] = { t: 's', v: prData.department || '' };
     lineItemsSheet[`T${row}`] = { t: 's', v: warehouse?.receiving_site_id || '' };
     lineItemsSheet[`U${row}`] = { t: 's', v: warehouse?.receiving_warehouse_id || '' };
     lineItemsSheet[`V${row}`] = { t: 'n', v: item.requiredquantity || 0 };
     lineItemsSheet[`W${row}`] = { t: 's', v: '' };
-    lineItemsSheet[`X${row}`] = { t: 's', v: item.vendoraccountnumber || '' };
+    // lineItemsSheet[`X${row}`] = { t: 's', v: item.vendoraccountnumber || '' };
   }
 
   // 4. Save as {prNumber}.xlsx

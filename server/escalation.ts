@@ -24,7 +24,7 @@ class EscalationService {
 
   private initializeCronJob() {
     // Run every 1 minute to check for escalations
-    this.cronJob = schedule('*/1 * * * *', () => {
+    this.cronJob = schedule('*/3 * * * *', () => {
       this.checkEscalations();
     }, {
       timezone: "Asia/Kolkata" // Adjust to your timezone
@@ -126,7 +126,7 @@ class EscalationService {
     // TESTING: escalate after 1 minute
     const minutesSinceCreation = (new Date().getTime() - new Date(request.created_at).getTime()) / (1000 * 60);
     console.log(`[TEST] Minutes since creation for PR ${request.pr_number}:`, minutesSinceCreation);
-    if (minutesSinceCreation >= 1) {
+    if (minutesSinceCreation >= 3) {
       console.log(`[TEST] Escalating PR ${request.pr_number} to manager_1 after 1 minute`);
       await this.escalateToManager1(request, escalationMatrix);
     }
@@ -158,7 +158,7 @@ class EscalationService {
     const actedAt = approver1OrManager1ApprovalLog.acted_at ? new Date(approver1OrManager1ApprovalLog.acted_at) : new Date(0);
     const minutesSinceApproval = (new Date().getTime() - actedAt.getTime()) / (1000 * 60);
     console.log(`[TEST] Minutes since approver_1 or manager_1 approval for PR ${request.pr_number}:`, minutesSinceApproval);
-    if (minutesSinceApproval >= 1) {
+    if (minutesSinceApproval >= 3) {
       console.log(`[TEST] Escalating PR ${request.pr_number} to manager_2 after 1 minute`);
       await this.escalateToManager2(request, escalationMatrix);
     }

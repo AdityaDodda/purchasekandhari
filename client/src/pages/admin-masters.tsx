@@ -164,6 +164,7 @@ export default function AdminMasters() {
         setSortKey={setSortKey}
         sortOrder={sortOrder}
         setSortOrder={setSortOrder}
+        type={type}
       />
     </TabsContent>
   );
@@ -313,9 +314,6 @@ export default function AdminMasters() {
   );
 }
 
-// REMOVED: Unused wrapper components (UsersMaster, EntityMaster, etc.) for simplicity.
-// The `renderMasterTable` function handles this more efficiently.
-
 // Generic Master Table Component
 function MasterTable({ 
   title, 
@@ -336,7 +334,8 @@ function MasterTable({
   setSortKey,
   sortOrder,
   setSortOrder,
-}: MasterTableProps) {
+  type: propsType
+}: MasterTableProps & { type: string }) {
   
   const totalPages = Math.ceil(totalItems / pageSize);
   const hasPrevious = currentPage > 1;
@@ -349,6 +348,27 @@ function MasterTable({
       setSortOrder('asc');
     }
     setCurrentPage(1);
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch(`/api/admin/masters/${propsType}/template`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to download template');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${propsType}_template.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Error downloading template');
+    }
   };
 
   return (
@@ -372,6 +392,10 @@ function MasterTable({
             <Button onClick={onAdd}>
               <Plus className="h-4 w-4 mr-2" />
               Add New
+            </Button>
+            <Button variant="outline" onClick={() => handleDownloadTemplate()}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Template
             </Button>
             <Button variant="outline" onClick={() => exportToXLSX(data, `${title.replace(/\s+/g, '_').toLowerCase()}_export.xlsx`)}>
               <Download className="h-4 w-4 mr-2" />
@@ -582,7 +606,7 @@ function MasterForm({ type, editingItem, onClose }: { type: MasterType, editingI
     mutationFn: async (data: any) => {
       // For editing, permissions are often handled as an array. If it's a string, split it.
       if (data.permissions && typeof data.permissions === 'string') {
-        data.permissions = data.permissions.split(',').map(s => s.trim());
+        data.permissions = data.permissions.split(',').map((s: string) => s.trim());
       }
       if (isEdit) {
         let key;
