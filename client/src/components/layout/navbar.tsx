@@ -88,7 +88,7 @@ export function Navbar() {
                     tabIndex={0}
                   >
                     <span className="text-white font-semibold text-sm">
-                      {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
+                      {user?.email ? user.email.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
                     </span>
                   </div>
                 </DropdownMenuTrigger>

@@ -178,6 +178,81 @@ export class DatabaseStorage implements IStorage {
     this.prisma = prismaInstance;
   }
 
+  // Bulk insert for users
+  async bulkInsertUsers(data: any[]): Promise<{inserted: number, skipped: number, errors: number}> {
+    let inserted = 0, skipped = 0, errors = 0;
+    for (const row of data) {
+      try {
+        if (!row.emp_code) { skipped++; continue; }
+        const exists = await this.prisma.users.findUnique({ where: { emp_code: String(row.emp_code) } });
+        if (exists) { skipped++; continue; }
+        await this.prisma.users.create({ data: row });
+        inserted++;
+      } catch (e) { errors++; }
+    }
+    return { inserted, skipped, errors };
+  }
+
+  // Bulk insert for departments
+  async bulkInsertDepartments(data: any[]): Promise<{inserted: number, skipped: number, errors: number}> {
+    let inserted = 0, skipped = 0, errors = 0;
+    for (const row of data) {
+      try {
+        if (!row.dept_number) { skipped++; continue; }
+        const exists = await this.prisma.departments.findUnique({ where: { dept_number: String(row.dept_number) } });
+        if (exists) { skipped++; continue; }
+        await this.prisma.departments.create({ data: row });
+        inserted++;
+      } catch (e) { errors++; }
+    }
+    return { inserted, skipped, errors };
+  }
+
+  // Bulk insert for sites
+  async bulkInsertSites(data: any[]): Promise<{inserted: number, skipped: number, errors: number}> {
+    let inserted = 0, skipped = 0, errors = 0;
+    for (const row of data) {
+      try {
+        if (!row.Site_ID) { skipped++; continue; }
+        const exists = await this.prisma.sites.findFirst({ where: { Site_ID: String(row.Site_ID) } });
+        if (exists) { skipped++; continue; }
+        await this.prisma.sites.create({ data: row });
+        inserted++;
+      } catch (e) { errors++; }
+    }
+    return { inserted, skipped, errors };
+  }
+
+  // Bulk insert for inventory
+  async bulkInsertInventory(data: any[]): Promise<{inserted: number, skipped: number, errors: number}> {
+    let inserted = 0, skipped = 0, errors = 0;
+    for (const row of data) {
+      try {
+        if (!row.itemnumber) { skipped++; continue; }
+        const exists = await this.prisma.inventory.findUnique({ where: { itemnumber: String(row.itemnumber) } });
+        if (exists) { skipped++; continue; }
+        await this.prisma.inventory.create({ data: row });
+        inserted++;
+      } catch (e) { errors++; }
+    }
+    return { inserted, skipped, errors };
+  }
+
+  // Bulk insert for vendors
+  async bulkInsertVendors(data: any[]): Promise<{inserted: number, skipped: number, errors: number}> {
+    let inserted = 0, skipped = 0, errors = 0;
+    for (const row of data) {
+      try {
+        if (!row.vendoraccountnumber) { skipped++; continue; }
+        const exists = await this.prisma.vendors.findUnique({ where: { vendoraccountnumber: String(row.vendoraccountnumber) } });
+        if (exists) { skipped++; continue; }
+        await this.prisma.vendors.create({ data: row });
+        inserted++;
+      } catch (e) { errors++; }
+    }
+    return { inserted, skipped, errors };
+  }
+
   // User Operations
   async getUser(empCode: string): Promise<User | null> {
     return this.prisma.users.findUnique({ where: { emp_code: empCode } });

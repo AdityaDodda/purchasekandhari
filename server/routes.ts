@@ -13,6 +13,7 @@ import { generatePurchaseRequestExcel } from "./excelExport";
 import { sendExcelToRpaPoc } from "./email";
 import { sendApprovalRequestEmail } from './email';
 import { generateBulkTemplateXLSX, masterFields } from "./bulkTemplateUtil";
+import * as XLSX from 'xlsx';
 
 const prisma = new PrismaClient();
 
@@ -99,6 +100,8 @@ const upload = multer({
     }
   }
 });
+
+const memoryUpload = multer({ storage: multer.memoryStorage() });
 
 // Helper to parse dd-mm-yyyy to Date
 function parseDDMMYYYY(dateStr: string | null | undefined): Date | null {
@@ -1369,6 +1372,41 @@ app.get("/api/escalation-matrix/:pr_number", async (req, res) => {
       res.send(buffer);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // BULK IMPORT for Admin Masters
+  app.post("/api/admin/masters/:type/import", requireAuth, memoryUpload.single("file"), async (req, res) => {
+    const { type } = req.params;
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    try {
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      let result;
+      switch (type) {
+        case 'users':
+          result = await storage.bulkInsertUsers(data);
+          break;
+        case 'departments':
+          result = await storage.bulkInsertDepartments(data);
+          break;
+        case 'sites':
+          result = await storage.bulkInsertSites(data);
+          break;
+        case 'inventory':
+          result = await storage.bulkInsertInventory(data);
+          break;
+        case 'vendors':
+          result = await storage.bulkInsertVendors(data);
+          break;
+        default:
+          return res.status(400).json({ message: "Bulk import not supported for this master type." });
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("Bulk import error:", err);
+      res.status(500).json({ message: "Failed to import data." });
     }
   });
 

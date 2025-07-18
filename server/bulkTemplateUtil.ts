@@ -100,7 +100,8 @@ const masterFields: Record<string, { label: string; key: string }[]> = {
 export function generateBulkTemplateXLSX(masterType: string): Buffer {
   const fields = masterFields[masterType];
   if (!fields) throw new Error("Unknown master type");
-  const ws = XLSX.utils.aoa_to_sheet([fields.map(f => f.label)]);
+  // Use keys as headers for import compatibility
+  const ws = XLSX.utils.aoa_to_sheet([fields.map(f => f.key)]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Template");
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });

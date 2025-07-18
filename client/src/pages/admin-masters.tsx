@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, Building, MapPin, Shield, Settings, Package, Truck, Plus, Edit, Trash2, Save, X, Search, Download } from "lucide-react";
+import { Users, Building, MapPin, Shield, Settings, Package, Truck, Plus, Edit, Trash2, Save, X, Search, Download, Upload } from "lucide-react";
 import { useForm } from 'react-hook-form';
 import { Navbar } from "@/components/layout/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -340,6 +340,13 @@ function MasterTable({
   const totalPages = Math.ceil(totalItems / pageSize);
   const hasPrevious = currentPage > 1;
   const hasNext = currentPage < totalPages;
+  const { toast } = useToast();
+
+  // Bulk Import Dialog State
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+
   const handleSort = (key: string) => {
     if (sortKey === key) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -371,6 +378,37 @@ function MasterTable({
     }
   };
 
+  // Handle Bulk Import
+  const handleImport = async () => {
+    if (!importFile) return;
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      const response = await fetch(`/api/admin/masters/${propsType}/import`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Import failed');
+      toast({
+        title: 'Bulk Import Complete',
+        description: `Inserted: ${result.inserted}, Skipped: ${result.skipped}, Errors: ${result.errors}`,
+      });
+      setShowImportDialog(false);
+      setImportFile(null);
+    } catch (err: any) {
+      toast({
+        title: 'Bulk Import Failed',
+        description: err.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -397,6 +435,10 @@ function MasterTable({
               <Download className="h-4 w-4 mr-2" />
               Download Template
             </Button>
+            <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Import
+            </Button>
             <Button variant="outline" onClick={() => exportToXLSX(data, `${title.replace(/\s+/g, '_').toLowerCase()}_export.xlsx`)}>
               <Download className="h-4 w-4 mr-2" />
               Export
@@ -405,6 +447,32 @@ function MasterTable({
         </div>
       </CardHeader>
       <CardContent>
+        {/* Bulk Import Dialog */}
+        {showImportDialog && (
+          <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+            <DialogContent className="max-w-md w-full">
+              <DialogHeader>
+                <DialogTitle>Bulk Import</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4">
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={e => setImportFile(e.target.files?.[0] || null)}
+                  disabled={importing}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" type="button" onClick={() => setShowImportDialog(false)} disabled={importing}>
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={handleImport} disabled={!importFile || importing}>
+                    {importing ? 'Importing...' : 'Import'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
         {isLoading ? (
           <div className="flex justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
