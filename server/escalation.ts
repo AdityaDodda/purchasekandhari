@@ -1,6 +1,5 @@
 import { schedule, ScheduledTask } from 'node-cron';
 import { PrismaClient } from '@prisma/client';
-import { storage } from './storage';
 import { sendEscalationEmail, sendRejectionEmail } from './email';
 
 const prisma = new PrismaClient();
@@ -24,7 +23,7 @@ class EscalationService {
 
   private initializeCronJob() {
     // Run every 1 minute to check for escalations
-    this.cronJob = schedule('*/3 * * * *', () => {
+    this.cronJob = schedule('*/1 * * * *', () => {
       this.checkEscalations();
     }, {
       timezone: "Asia/Kolkata" // Adjust to your timezone
@@ -123,11 +122,11 @@ class EscalationService {
       return;
     }
 
-    // TESTING: escalate after 1 minute
+    // TESTING: escalate after 3 minutes
     const minutesSinceCreation = (new Date().getTime() - new Date(request.created_at).getTime()) / (1000 * 60);
     console.log(`[TEST] Minutes since creation for PR ${request.pr_number}:`, minutesSinceCreation);
     if (minutesSinceCreation >= 3) {
-      console.log(`[TEST] Escalating PR ${request.pr_number} to manager_1 after 1 minute`);
+      console.log(`[TEST] Escalating PR ${request.pr_number} to manager_1 after 3 minutes`);
       await this.escalateToManager1(request, escalationMatrix);
     }
   }
@@ -154,12 +153,12 @@ class EscalationService {
       console.log(`[TEST] No approver_1 or manager_1 approval found for PR ${request.pr_number}`);
       return;
     }
-    // TESTING: escalate after 1 minute
+    // TESTING: escalate after 3 minutes
     const actedAt = approver1OrManager1ApprovalLog.acted_at ? new Date(approver1OrManager1ApprovalLog.acted_at) : new Date(0);
     const minutesSinceApproval = (new Date().getTime() - actedAt.getTime()) / (1000 * 60);
     console.log(`[TEST] Minutes since approver_1 or manager_1 approval for PR ${request.pr_number}:`, minutesSinceApproval);
     if (minutesSinceApproval >= 3) {
-      console.log(`[TEST] Escalating PR ${request.pr_number} to manager_2 after 1 minute`);
+      console.log(`[TEST] Escalating PR ${request.pr_number} to manager_2 after 3 minutes`);
       await this.escalateToManager2(request, escalationMatrix);
     }
   }
@@ -182,13 +181,13 @@ class EscalationService {
       console.log(`[TEST] No approver_2 or manager_2 approval found for PR ${request.pr_number}`);
       return;
     }
-    // TESTING: escalate after 1 minute
+    // TESTING: escalate after 3 minutes
     const actedAt = approver2OrManager2ApprovalLog.acted_at ? new Date(approver2OrManager2ApprovalLog.acted_at) : new Date(0);
     const minutesSinceApproval = (new Date().getTime() - actedAt.getTime()) / (1000 * 60);
     console.log(`[TEST] Minutes since approver_2 or manager_2 approval for PR ${request.pr_number}:`, minutesSinceApproval);
-    if (minutesSinceApproval >= 1) {
-      console.log(`[TEST] Rejecting PR ${request.pr_number} after 1 minute at level 3`);
-      await this.rejectRequest(request, '[TEST] Request automatically rejected after 1 minute at level 3');
+    if (minutesSinceApproval >= 3) {
+      console.log(`[TEST] Rejecting PR ${request.pr_number} after 3 minutes at level 3`);
+      await this.rejectRequest(request, '[TEST] Request automatically rejected after 3 minutes at level 3');
     }
   }
 
@@ -218,14 +217,16 @@ class EscalationService {
 
       console.log(`Escalated PR ${request.pr_number} to manager_1`);
       
-      // TODO: Send email notification to manager_1, approver_1, requester
+      // Send email notification: To manager_1, CC approver_1, requester
       if (escalationMatrix) {
         const toList = [
+          escalationMatrix.manager_1_mail
+        ].filter(Boolean);
+        const ccList = [
           escalationMatrix.approver_1_mail,
-          escalationMatrix.manager_1_mail,
           escalationMatrix.req_emp_mail
         ].filter(Boolean);
-        await sendEscalationEmail(toList, request.pr_number, 1, 12);
+        await sendEscalationEmail(toList, ccList, request.pr_number, 1, 12);
       }
       
     } catch (error) {
@@ -259,15 +260,17 @@ class EscalationService {
 
       console.log(`Escalated PR ${request.pr_number} to manager_2`);
       
-      // TODO: Send email notification to manager_2, approver_2, approver_1, requester
+      // Send email notification: To manager_2, CC manager_1, approver_2, requester
       if (escalationMatrix) {
         const toList = [
-          escalationMatrix.approver_2_mail,
-          escalationMatrix.manager_2_mail,
+          escalationMatrix.manager_2_mail
+        ].filter(Boolean);
+        const ccList = [
           escalationMatrix.manager_1_mail,
+          escalationMatrix.approver_2_mail,
           escalationMatrix.req_emp_mail
         ].filter(Boolean);
-        await sendEscalationEmail(toList, request.pr_number, 2, 12);
+        await sendEscalationEmail(toList, ccList, request.pr_number, 2, 12);
       }
       
     } catch (error) {
@@ -301,17 +304,19 @@ class EscalationService {
 
       console.log(`Rejected PR ${request.pr_number}: ${reason}`);
       
-      // TODO: Send email notification to final approver, approver_2, approver_1, requester
+      // Send email notification: To approver_3a, approver_3b; CC approver_2, approver_1, requester
       if (request.escalation_matrix) {
         const em = request.escalation_matrix;
         const toList = [
           em.approver_3a_mail,
-          em.approver_3b_mail,
+          em.approver_3b_mail
+        ].filter(Boolean);
+        const ccList = [
           em.approver_2_mail,
           em.approver_1_mail,
           em.req_emp_mail
         ].filter(Boolean);
-        await sendRejectionEmail(toList, request.pr_number, reason);
+        await sendRejectionEmail(toList, ccList, request.pr_number, reason);
       }
       
     } catch (error) {

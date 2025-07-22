@@ -138,7 +138,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="border-l-4 border-l-[hsl(207,90%,54%)]">
             <CardContent className="p-6">
               <div className="flex items-center">
@@ -194,7 +194,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </div> */}
 
         {/* My Requests Table */}
         <Card>

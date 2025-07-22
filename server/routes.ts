@@ -1449,6 +1449,21 @@ app.get("/api/escalation-matrix/:pr_number", async (req, res) => {
     }
   });
 
+  // Stock AvailPhysical API
+  app.get('/api/stock/:itemnumber/availphysical', async (req, res) => {
+    try {
+      const itemnumber = req.params.itemnumber;
+      const availphysical = await storage.getStockAvailPhysical(itemnumber);
+      if (availphysical === null || availphysical === undefined) {
+        return res.json({ availphysical: 'na' });
+      }
+      res.json({ availphysical });
+    } catch (error) {
+      console.error('Error fetching availphysical:', error);
+      res.status(500).json({ message: 'Failed to fetch availphysical' });
+    }
+  });
+
   // Catch-all for unknown API routes
   app.use('/api', (req, res) => {
     res.status(404).json({ message: 'API route not found' });

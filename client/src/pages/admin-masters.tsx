@@ -116,11 +116,20 @@ export default function AdminMasters() {
 
   const handleDelete = (id: number | string) => {
     if (confirm('Are you sure you want to delete this record?')) {
-      let key = id;
-      if (activeTab === 'departments') key = masterData.find((item: any) => item.id === id)?.dept_number || id;
-      else if (activeTab === 'users') key = masterData.find((item: any) => item.id === id)?.emp_code || id;
-      else if (activeTab === 'approval-matrix') key = masterData.find((item: any) => item.id === id)?.emp_code || id;
-      deleteMutation.mutate({ type: activeTab, id: key });
+      let key;
+      if (activeTab === 'users') key = masterData.find((item: any) => item.emp_code === id || item.id === id)?.emp_code || id;
+      else if (activeTab === 'departments') key = masterData.find((item: any) => item.dept_number === id || item.id === id)?.dept_number || id;
+      else if (activeTab === 'approval-matrix') key = masterData.find((item: any) => item.emp_code === id || item.id === id)?.emp_code || id;
+      else if (activeTab === 'inventory') key = masterData.find((item: any) => item.itemnumber === id || item.id === id)?.itemnumber || id;
+      else if (activeTab === 'vendors') key = masterData.find((item: any) => item.vendoraccountnumber === id || item.id === id)?.vendoraccountnumber || id;
+      else if (activeTab === 'sites') key = masterData.find((item: any) => item.id === id)?.id || id;
+      else key = id;
+      const supportedTypes = ['users', 'departments', 'approval-matrix', 'inventory', 'vendors', 'sites'];
+      if (supportedTypes.includes(activeTab)) {
+        deleteMutation.mutate({ type: activeTab, id: encodeURIComponent(key) });
+      } else {
+        alert('Delete not supported for this master type.');
+      }
     }
   };
 
@@ -501,9 +510,11 @@ function MasterTable({
                       </span>
                     </th>
                   ))}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <span className="border border-gray-300 block px-0 py-0">Actions</span>
-                  </th>
+                  {['users','departments','approval-matrix','inventory','vendors','sites'].includes(propsType) && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <span className="border border-gray-300 block px-0 py-0">Actions</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -516,21 +527,23 @@ function MasterTable({
                           {column.render ? column.render(item[column.key]) : item[column.key] ?? '-'}
                         </td>
                       ))}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex space-x-2">
-                          <Button variant="ghost" size="sm" onClick={() => onEdit(item)} className="text-blue-600">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="text-red-600">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
+                      {['users','departments','approval-matrix','inventory','vendors','sites'].includes(propsType) && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => onEdit(item)} className="text-blue-600">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} className="text-red-600">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={columns.length + 1} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={columns.length + (['users','departments','approval-matrix','inventory','vendors','sites'].includes(propsType) ? 1 : 0)} className="px-6 py-4 text-center text-gray-500">
                       No records found
                     </td>
                   </tr>
@@ -672,7 +685,6 @@ function MasterForm({ type, editingItem, onClose }: { type: MasterType, editingI
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
-      // For editing, permissions are often handled as an array. If it's a string, split it.
       if (data.permissions && typeof data.permissions === 'string') {
         data.permissions = data.permissions.split(',').map((s: string) => s.trim());
       }
@@ -681,8 +693,16 @@ function MasterForm({ type, editingItem, onClose }: { type: MasterType, editingI
         if (type === 'users') key = editingItem.emp_code;
         else if (type === 'departments') key = editingItem.dept_number;
         else if (type === 'approval-matrix') key = editingItem.emp_code;
+        else if (type === 'inventory') key = editingItem.itemnumber;
+        else if (type === 'vendors') key = editingItem.vendoraccountnumber;
+        else if (type === 'sites') key = editingItem.id;
         else key = editingItem.id;
-        return await apiRequest1('PUT', `/api/admin/masters/${type}/${key}`, data);
+        const supportedTypes = ['users', 'departments', 'approval-matrix', 'inventory', 'vendors', 'sites'];
+        if (supportedTypes.includes(type)) {
+          return await apiRequest1('PUT', `/api/admin/masters/${type}/${encodeURIComponent(key)}`, data);
+        } else {
+          throw new Error('Edit not supported for this master type.');
+        }
       } else {
         return await apiRequest1('POST', `/api/admin/masters/${type}`, data);
       }

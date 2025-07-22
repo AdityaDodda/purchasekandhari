@@ -9,6 +9,8 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, className, daysPending, approverLevel }: StatusBadgeProps) {
+  // Default status to empty string if undefined/null
+  const safeStatus = status || "";
   const getStatusStyles = (status: string) => {
     switch (status.toLowerCase()) {
       case "submitted":
@@ -29,12 +31,13 @@ export function StatusBadge({ status, className, daysPending, approverLevel }: S
   };
 
   const formatStatus = (status: string) => {
+    if (!status) return "Unknown";
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
   };
 
   return (
-    <Badge className={cn(getStatusStyles(status), className)}>
-      {formatStatus(status)}
+    <Badge className={cn(getStatusStyles(safeStatus), className)}>
+      {formatStatus(safeStatus)}
       {(typeof daysPending === 'number' && typeof approverLevel === 'number') && (
         <span className="ml-2 text-[10px] font-normal">
           | {daysPending} days | Level {approverLevel}

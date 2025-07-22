@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
-import { Building2 } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -70,7 +69,7 @@ export default function ForgotPasswordPage() {
     <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
         <div className="flex flex-col items-center space-y-2 text-center">
-            <Building2 className="w-10 h-10 text-blue-600" />
+            <img src="/assets/cola.png" alt="cola" />
           <h1 className="text-3xl font-bold">Forgot Password</h1>
           <p className="text-gray-500 dark:text-gray-400">
             Enter your email to receive a password reset link.

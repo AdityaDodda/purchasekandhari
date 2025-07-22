@@ -159,6 +159,10 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
 
   // Add Item handler
   const handleAddItem = () => {
+    if (!formData.receiving_warehouse_id || formData.receiving_warehouse_id === "") {
+      toast({ title: "Warehouse is required", description: "Please select a receiving warehouse.", variant: "destructive" });
+      return;
+    }
     if (!formData.requiredQuantity || isNaN(Number(formData.requiredQuantity)) || Number(formData.requiredQuantity) <= 0) {
       toast({ title: "Required Quantity is mandatory", description: "Please enter a valid quantity.", variant: "destructive" });
       return;
@@ -181,6 +185,10 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
 
   // Edit Item handler
   const handleUpdateItem = () => {
+    if (!formData.receiving_warehouse_id || formData.receiving_warehouse_id === "") {
+      toast({ title: "Warehouse is required", description: "Please select a receiving warehouse.", variant: "destructive" });
+      return;
+    }
     if (!formData.requiredQuantity || isNaN(Number(formData.requiredQuantity)) || Number(formData.requiredQuantity) <= 0) {
       toast({ title: "Required Quantity is mandatory", description: "Please enter a valid quantity.", variant: "destructive" });
       return;
@@ -612,6 +620,9 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     rows={3}
                   />
                 </div>
+                <div>
+                  <StockAvailableBox itemNumber={selectedInventoryItem?.itemnumber || formData.itemNumber} />
+                </div>
               </div>
               <div className="flex justify-end space-x-2 mt-6">
                 <Button variant="outline" onClick={() => {
@@ -654,7 +665,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                     <th className="text-left p-3 font-semibold text-sm border-r">Required By</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Location</th>
                     <th className="text-left p-3 font-semibold text-sm border-r">Item Cost (₹)</th>
-                    <th className="text-left p-3 font-semibold text-sm border-r">Warehouse ID</th>
+                    {/* <th className="text-left p-3 font-semibold text-sm border-r">Warehouse ID</th> */}
                     {/* <th className="text-left p-3 font-semibold text-sm">Warehouse Address</th> */}
                     {editable && <th className="text-center p-3 font-semibold text-sm">Actions</th>}
                   </tr>
@@ -683,7 +694,7 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
                       <td className="p-3 border-r text-sm text-gray-600">
                         {formatCurrency(item.estimatedCost)}
                       </td>
-                      <td className="p-3 border-r text-sm">{item.receiving_warehouse_id}</td>
+                      {/* <td className="p-3 border-r text-sm">{item.receiving_warehouse_id}</td> */}
                       {/* <td className="p-3 border-r text-sm">{item.receiving_warehouse_address}</td> */}
                       {editable && (
                         <td className="p-3 text-center">
@@ -725,6 +736,44 @@ export function LineItemsGrid({ items, onItemsChange, editable = true }: LineIte
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function StockAvailableBox({ itemNumber }: { itemNumber?: string }) {
+  const {
+    data: stockAvailable,
+    isLoading: stockLoading,
+    isError: stockError,
+  } = useQuery({
+    queryKey: ["stock-available", itemNumber],
+    queryFn: async () => {
+      if (!itemNumber) return null;
+      const res = await fetch(`/api/stock/${encodeURIComponent(itemNumber)}/availphysical`);
+      if (!res.ok) throw new Error("Failed to fetch stock");
+      const data = await res.json();
+      return typeof data === "number" ? data : data?.availphysical ?? null;
+    },
+    enabled: !!itemNumber,
+    staleTime: 30 * 1000,
+  });
+
+  return (
+    <div className="md:col-span-2">
+      <Label>Stock Available</Label>
+      <div className="bg-gray-100 border rounded px-3 py-2 w-full min-h-[40px] flex items-center">
+        {itemNumber ? (
+          stockLoading ? (
+            <span className="text-gray-500">Loading...</span>
+          ) : stockError ? (
+            <span className="text-red-500">Error fetching stock</span>
+          ) : (
+            <span className="font-semibold">{stockAvailable ?? "N/A"}</span>
+          )
+        ) : (
+          <span className="text-gray-400">Select an item to view stock</span>
+        )}
+      </div>
     </div>
   );
 }

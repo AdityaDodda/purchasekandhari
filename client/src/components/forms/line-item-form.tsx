@@ -36,6 +36,8 @@ const lineItemSchema = z.object({
   estimatedCost: z.number().min(0.01, "Estimated cost must be greater than 0"),
   itemJustification: z.string().optional(),
   vendor: vendorSchema.nullable().optional(), // Added vendor schema, allowing null or undefined
+  receiving_warehouse_id: z.string().min(1, "Receiving warehouse is required"),
+  receiving_warehouse_address: z.string().optional(),
 });
 
 interface LineItemFormProps {
@@ -218,6 +220,26 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
       vendorItemRefs.current[highlightedVendorIndex]?.scrollIntoView({ block: "nearest" });
     }
   }, [highlightedVendorIndex]);
+
+  // Fetch stock available for selected item
+  const itemNumber = getValues("itemNumber");
+  const {
+    data: stockAvailable,
+    isLoading: stockLoading,
+    isError: stockError,
+  } = useQuery({
+    queryKey: ["stock-available", itemNumber],
+    queryFn: async () => {
+      if (!itemNumber) return null;
+      const res = await fetch(`/api/stock/${encodeURIComponent(itemNumber)}/availphysical`);
+      if (!res.ok) throw new Error("Failed to fetch stock");
+      const data = await res.json();
+      // If API returns a number directly, return it; else, try to extract
+      return typeof data === "number" ? data : data?.stockAvailable ?? data?.available ?? null;
+    },
+    enabled: !!itemNumber,
+    staleTime: 30 * 1000,
+  });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -527,6 +549,24 @@ export function LineItemForm({ onAddItem }: LineItemFormProps) {
               {errors.itemJustification && (
                 <p className="text-sm text-destructive mt-1">{errors.itemJustification.message}</p>
               )}
+            </div>
+
+            {/* Stock Available Box */}
+            <div className="md:col-span-2 lg:col-span-3">
+              <Label>Stock Available</Label>
+              <div className="bg-gray-100 border rounded px-3 py-2 w-full min-h-[40px] flex items-center">
+                {itemNumber ? (
+                  stockLoading ? (
+                    <span className="text-gray-500">Loading...</span>
+                  ) : stockError ? (
+                    <span className="text-red-500">Error fetching stock</span>
+                  ) : (
+                    <span className="font-semibold">{stockAvailable ?? "N/A"}</span>
+                  )
+                ) : (
+                  <span className="text-gray-400">Select an item to view stock</span>
+                )}
+              </div>
             </div>
           </div>
 

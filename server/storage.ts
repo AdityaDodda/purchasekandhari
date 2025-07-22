@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 // Import specific types from your schema.prisma.
 import type {
@@ -180,15 +181,28 @@ export class DatabaseStorage implements IStorage {
 
   // Bulk insert for users
   async bulkInsertUsers(data: any[]): Promise<{inserted: number, skipped: number, errors: number}> {
+    console.log("bcrypt loaded:", typeof bcrypt, "hash:", typeof bcrypt.hash);
+    const tempPassword = 'Temp@123';
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
     let inserted = 0, skipped = 0, errors = 0;
     for (const row of data) {
       try {
         if (!row.emp_code) { skipped++; continue; }
         const exists = await this.prisma.users.findUnique({ where: { emp_code: String(row.emp_code) } });
         if (exists) { skipped++; continue; }
-        await this.prisma.users.create({ data: row });
+        await this.prisma.users.create({
+          data: {
+            ...row,
+            mobile_no: row.mobile_no != null ? String(row.mobile_no) : null,
+            password: hashedPassword,
+            must_reset_password: true,
+          }
+        });
         inserted++;
-      } catch (e) { errors++; }
+      } catch (e) {
+        errors++;
+        console.error('Error inserting user:', row, e);
+      }
     }
     return { inserted, skipped, errors };
   }
@@ -1261,6 +1275,15 @@ async populateEscalationMatrixForPR(pr_number: string): Promise<any> {
   }
   async deleteEmployeeEntity(personnel_number: string) {
     return this.prisma.employee_entity.delete({ where: { personnel_number } });
+  }
+
+  // --- Stock Table ---
+  async getStockAvailPhysical(itemnumber: string): Promise<number | null> {
+    const stock = await this.prisma.stock.findUnique({
+      where: { itemnumber },
+      select: { availphysical: true },
+    });
+    return stock?.availphysical ?? null;
   }
 }
 

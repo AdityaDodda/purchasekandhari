@@ -10,7 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatDate, formatDateTime } from "@/lib/utils";
 
 export function Navbar() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -68,12 +68,12 @@ export function Navbar() {
 
           {/* Navigation Section */}
           <div className="flex items-center justify-center space-x-1 md:space-x-4">
-            <NavButton icon={<Home className="h-5 w-5 text-white mr-2" />} label="Dashboard" onClick={() => handleNavigation("/")} />
-            <NavButton icon={<FileText className="h-5 w-5 text-white mr-2" />} label="New Request" onClick={() => handleNavigation("/new-request")} />
+            <NavButton path="/" currentPath={location} icon={<Home className="h-5 w-5 text-white mr-2" />} label="Dashboard" onClick={() => setLocation("/")} />
+            <NavButton path="/new-request" currentPath={location} icon={<FileText className="h-5 w-5 text-white mr-2" />} label="New Request" onClick={() => setLocation("/new-request")} />
             {/* <NavButton icon={<List className="h-5 w-5 text-white mr-2" />} label="Requests" onClick={() => handleNavigation("/my-requests")} /> */}
-            <NavButton icon={<BarChart3 className="h-5 w-5 text-white mr-2" />} label="Reports" onClick={() => handleNavigation("/reports")} />
+            <NavButton path="/reports" currentPath={location} icon={<BarChart3 className="h-5 w-5 text-white mr-2" />} label="Reports" onClick={() => setLocation("/reports")} />
             {user?.role === "admin" && (
-              <NavButton icon={<Database className="h-5 w-5 text-white mr-2" />} label="Masters" onClick={() => handleNavigation("/admin-masters")} />
+              <NavButton path="/admin-masters" currentPath={location} icon={<Database className="h-5 w-5 text-white mr-2" />} label="Masters" onClick={() => setLocation("/admin-masters")} />
             )}
           </div>
 
@@ -123,11 +123,15 @@ export function Navbar() {
   );
 }
 
-function NavButton({ icon, label, onClick }: { icon: JSX.Element; label: string; onClick: () => void }) {
+function NavButton({ icon, label, onClick, path, currentPath }: { icon: JSX.Element; label: string; onClick: () => void; path: string; currentPath: string }) {
+  const isActive = currentPath === path || (path !== '/' && currentPath.startsWith(path));
   return (
     <Button
       variant="ghost"
-      className="text-white hover:text-[hsl(32,100%,50%)] hover:bg-transparent px-2 py-2 text-sm font-medium flex items-center"
+      className={
+        `text-white hover:text-[hsl(32,100%,50%)] hover:bg-transparent px-2 py-2 text-sm font-medium flex items-center ` +
+        (isActive ? 'text-[hsl(32,100%,50%)]' : '')
+      }
       onClick={onClick}
     >
       {icon}

@@ -201,6 +201,8 @@ export default function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
       toast({ title: "Success", description: "Request approved successfully." });
+      setShowDetailsModal(false);
+      setSelectedRequest(null);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -214,6 +216,8 @@ export default function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
       toast({ title: "Success", description: "Request rejected successfully." });
+      setShowDetailsModal(false);
+      setSelectedRequest(null);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -227,6 +231,8 @@ export default function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-requests"] });
       toast({ title: "Success", description: "Request returned successfully for revision." });
+      setShowDetailsModal(false);
+      setSelectedRequest(null);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -284,8 +290,8 @@ export default function AdminDashboard() {
         </div>
 
         {/* Analytics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        </div>
+        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        </div> */}
 
         {/* Filters */}
         <Card className="mb-6">

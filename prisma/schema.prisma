@@ -262,3 +262,13 @@ model warehouse_delivery {
   modified_by                String?   @db.VarChar(100)
   modified_date_time         DateTime? @default(now()) @db.Timestamp(6)
 }
+
+model stock {
+  itemnumber    String   @id @db.VarChar(100)
+  entity        String   @db.VarChar(10)
+  configid      String?  @db.VarChar(50)
+  inventsizeid  String?  @db.VarChar(50)
+  inventstyleid String?  @db.VarChar(50)
+  inventcolorid String?  @db.VarChar(50)
+  availphysical Decimal? @db.Decimal
+}
